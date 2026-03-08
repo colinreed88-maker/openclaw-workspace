@@ -7,8 +7,6 @@ import * as querySupabase from "./src/tools/query-supabase.js";
 import * as queryFinancialData from "./src/tools/query-financial-data.js";
 import * as retrieveKnowledgeDoc from "./src/tools/retrieve-knowledge-doc.js";
 import * as retrieveRampInvoice from "./src/tools/retrieve-ramp-invoice.js";
-// Memory tools
-import { saveMemoryDef, saveMemory, searchMemoriesDef, searchMemories, forgetMemoryDef, forgetMemory, } from "./src/tools/memory.js";
 // External tools
 import * as searchWeb from "./src/tools/search-web.js";
 import * as manageScheduledTasks from "./src/tools/manage-scheduled-tasks.js";
@@ -45,19 +43,6 @@ export default function (api) {
     api.registerTool({
         ...retrieveRampInvoice.definition,
         execute: retrieveRampInvoice.execute,
-    });
-    // ── Memory tools ──
-    api.registerTool({
-        ...saveMemoryDef,
-        execute: saveMemory,
-    });
-    api.registerTool({
-        ...searchMemoriesDef,
-        execute: searchMemories,
-    });
-    api.registerTool({
-        ...forgetMemoryDef,
-        execute: forgetMemory,
     });
     // ── External tools ──
     api.registerTool({

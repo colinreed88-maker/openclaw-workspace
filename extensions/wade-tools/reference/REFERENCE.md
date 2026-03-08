@@ -61,7 +61,6 @@
 | `retrieve_knowledge_doc` | Document search and download. |
 | `retrieve_ramp_invoice` | Ramp invoice PDF retrieval. |
 | `search_web` | Current web info, news, rates. |
-| `save_memory` / `search_memories` / `forget_memory` | Persistent memory for corrections, preferences, rules. |
 | `send_email` | Send email via Resend. Show draft first, call after approval. |
 | `create_calendar_event` | Create Google Calendar event. Show details first, call after approval. |
 | `get_calendar_availability` | Check free/busy for attendees. |
