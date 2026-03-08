@@ -1,50 +1,14 @@
-import { getSupabase } from "../db.js";
 import {
+  createCalendarEvent,
   queryFreeBusy,
   listUpcomingEvents as listEvents,
 } from "../integrations/google-calendar.js";
 import { textResult, type ToolResult } from "../types.js";
 
-const DEFAULT_DAILY_LIMIT = 5;
-
-async function countTodayActions(actionType: string): Promise<number> {
-  const supabase = getSupabase();
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-
-  const { count } = await supabase
-    .from("assistant_actions")
-    .select("id", { count: "exact", head: true })
-    .eq("action_type", actionType)
-    .in("status", ["proposed", "approved", "executing", "executed"])
-    .gte("created_at", todayStart.toISOString());
-
-  return count ?? 0;
-}
-
-async function getDailyLimit(actionType: string): Promise<number> {
-  const supabase = getSupabase();
-  const today = new Date().toISOString().slice(0, 10);
-
-  const { data: overrides } = await supabase
-    .from("agent_memories")
-    .select("content")
-    .eq("type", "rule")
-    .ilike("content", `%${actionType} limit override%${today}%`)
-    .order("created_at", { ascending: false })
-    .limit(1);
-
-  if (overrides?.length) {
-    const match = (overrides[0] as { content: string }).content.match(/override:\s*(\d+)/i);
-    if (match) return parseInt(match[1], 10);
-  }
-
-  return DEFAULT_DAILY_LIMIT;
-}
-
 export const createCalendarEventDef = {
   name: "create_calendar_event",
-  description: "Create an event on Google Calendar with attendees and send invitations.",
+  description:
+    "Create an event on Google Calendar with attendees and send invitations. IMPORTANT: Show the full event details (title, time, attendees) to the user first. Only call this tool after the user explicitly approves.",
   parameters: {
     type: "object",
     properties: {
@@ -59,34 +23,19 @@ export const createCalendarEventDef = {
 };
 
 export async function createCalendarEventExecute(_id: string, params: Record<string, unknown>): Promise<ToolResult> {
-  const supabase = getSupabase();
-
-  const countToday = await countTodayActions("create_calendar_event");
-  const limit = await getDailyLimit("create_calendar_event");
-  if (countToday >= limit) {
-    return textResult({
-      error: `Daily calendar event limit reached (${countToday}/${limit}). Ask Colin if he'd like to increase the limit for today.`,
+  try {
+    const result = await createCalendarEvent({
+      title: params.title as string,
+      start: params.start as string,
+      end: params.end as string,
+      attendees: params.attendees as string[],
+      description: params.description as string | undefined,
     });
+    return textResult({ created: true, ...result });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return textResult({ error: `Calendar event failed: ${msg}` });
   }
-
-  const { data: action, error } = await supabase
-    .from("assistant_actions")
-    .insert({
-      request_id: _id,
-      action_type: "create_calendar_event",
-      payload: params,
-      status: "proposed",
-    })
-    .select("id")
-    .single();
-
-  if (error) return textResult({ error: `Failed to queue calendar event: ${error.message}` });
-
-  return textResult({
-    status: "proposed",
-    action_id: action?.id,
-    message: "I've prepared the calendar event. Would you like me to create it?",
-  });
 }
 
 export const getCalendarAvailabilityDef = {

@@ -1,45 +1,39 @@
 import { getSupabase } from "./db.js";
+import { cachedLoad } from "./cache.js";
 
-export const DEPT_ALIASES: Record<string, string[]> = {
-  engineering: ["tech", "engineering", "product design", "product management"],
-  "food and beverage": ["f&b", "food and beverage", "grocer", "commissary"],
-  "f&b": ["f&b", "food and beverage", "grocer", "commissary"],
-  tech: ["tech", "engineering", "product design", "product management"],
-};
+// ── dim_bu_mapping row type ──
 
-export const FPA_DEPT_TO_BU: Record<string, string> = {
-  engineering: "Tech",
-  tech: "Tech",
-  product: "Tech",
-  "food and beverage": "F&B",
-  "f&b": "F&B",
-  grocer: "F&B",
-  commissary: "F&B",
-};
+interface BuMappingRow {
+  source_identifier: string;
+  budget_bu: string;
+  budget_department: string | null;
+  forecast_department: string | null;
+}
+
+async function loadBuMappingRows(): Promise<BuMappingRow[]> {
+  return cachedLoad("bu_mapping_rows", async () => {
+    const supabase = getSupabase();
+    const { data } = await supabase
+      .from("dim_bu_mapping")
+      .select("source_identifier, budget_bu, budget_department, forecast_department")
+      .eq("is_active", true)
+      .eq("source_system", "sage");
+    return (data ?? []) as BuMappingRow[];
+  });
+}
+
+// ── Public functions ──
 
 export async function resolveBudgetDeptToSageDepts(budgetDept: string): Promise<string[]> {
-  const supabase = getSupabase();
-  const { data } = await supabase
-    .from("dim_bu_mapping")
-    .select("source_identifier, budget_department, forecast_department, budget_bu")
-    .eq("source_system", "sage")
-    .eq("is_active", true);
-
-  if (!data) return [];
-
+  const rows = await loadBuMappingRows();
   const lower = budgetDept.toLowerCase();
   const sageDepts: string[] = [];
-  const aliasTargets = DEPT_ALIASES[lower];
 
-  for (const row of data as { source_identifier: string; budget_department: string | null; forecast_department: string | null; budget_bu: string | null }[]) {
-    const bd = (row.forecast_department ?? row.budget_department ?? "").toLowerCase();
+  for (const row of rows) {
+    const fd = (row.forecast_department ?? "").toLowerCase();
+    const bd = (row.budget_department ?? "").toLowerCase();
     const bu = (row.budget_bu ?? "").toLowerCase();
-
-    if (aliasTargets) {
-      if (aliasTargets.some((a) => bd.includes(a) || bu.includes(a))) {
-        sageDepts.push(row.source_identifier);
-      }
-    } else if (bd === lower) {
+    if (fd === lower || bd === lower || bu === lower) {
       sageDepts.push(row.source_identifier);
     }
   }
@@ -47,46 +41,40 @@ export async function resolveBudgetDeptToSageDepts(budgetDept: string): Promise<
 }
 
 export async function resolveDeptNamesToIds(deptNames: string[]): Promise<string[]> {
-  const supabase = getSupabase();
-  const { data } = await supabase
-    .from("intacct_departments")
-    .select("department_id, title")
-    .in("title", deptNames);
-
-  if (!data) return [];
-  return (data as { department_id: string }[]).map((r) => r.department_id);
+  const deptMap = await loadDeptIdToName();
+  const ids: string[] = [];
+  for (const [id, name] of deptMap) {
+    if (deptNames.includes(name)) ids.push(id);
+  }
+  return ids;
 }
 
 export async function loadDeptIdToName(): Promise<Map<string, string>> {
-  const supabase = getSupabase();
-  const { data } = await supabase
-    .from("intacct_departments")
-    .select("department_id, title");
-
-  if (!data) return new Map();
-  const map = new Map<string, string>();
-  for (const d of data as { department_id: string; title: string }[]) {
-    map.set(d.department_id, d.title);
-  }
-  return map;
+  return cachedLoad("dept_id_to_name", async () => {
+    const supabase = getSupabase();
+    const { data } = await supabase
+      .from("intacct_departments")
+      .select("department_id, title");
+    const map = new Map<string, string>();
+    for (const d of (data ?? []) as { department_id: string; title: string }[]) {
+      map.set(d.department_id, d.title);
+    }
+    return map;
+  });
 }
 
 export async function loadAccountNoToTitle(): Promise<Map<string, string>> {
-  const supabase = getSupabase();
-  const { data } = await supabase
-    .from("intacct_gl_detail")
-    .select("account_no, account_title")
-    .not("account_title", "is", null)
-    .limit(5000);
-
-  if (!data) return new Map();
-  const map = new Map<string, string>();
-  for (const r of data as { account_no: string; account_title: string | null }[]) {
-    if (r.account_title && !map.has(r.account_no)) {
-      map.set(r.account_no, r.account_title);
+  return cachedLoad("account_no_to_title", async () => {
+    const supabase = getSupabase();
+    const { data } = await supabase
+      .from("intacct_accounts")
+      .select("account_no, title");
+    const map = new Map<string, string>();
+    for (const r of (data ?? []) as { account_no: string; title: string | null }[]) {
+      if (r.title) map.set(r.account_no, r.title);
     }
-  }
-  return map;
+    return map;
+  });
 }
 
 const PL_GRAND_TOTALS = new Set([
@@ -98,37 +86,31 @@ const PL_GRAND_TOTALS = new Set([
 export interface FsMappingEntry { subtotal_line: string; is_pl: boolean }
 
 export async function loadFsMapping(): Promise<Map<string, FsMappingEntry>> {
-  const supabase = getSupabase();
-  const { data } = await supabase
-    .from("dim_fs_mapping")
-    .select("gl_account_number, subtotal_line, grand_total_line")
-    .not("subtotal_line", "is", null)
-    .limit(5000);
-
-  if (!data) return new Map();
-  const map = new Map<string, FsMappingEntry>();
-  for (const r of data as { gl_account_number: string; subtotal_line: string | null; grand_total_line: string | null }[]) {
-    if (r.subtotal_line) {
-      map.set(String(r.gl_account_number), {
-        subtotal_line: r.subtotal_line,
-        is_pl: PL_GRAND_TOTALS.has(r.grand_total_line ?? ""),
-      });
+  return cachedLoad("fs_mapping", async () => {
+    const supabase = getSupabase();
+    const { data } = await supabase
+      .from("dim_fs_mapping")
+      .select("gl_account_number, subtotal_line, grand_total_line")
+      .not("subtotal_line", "is", null)
+      .limit(5000);
+    const map = new Map<string, FsMappingEntry>();
+    for (const r of (data ?? []) as { gl_account_number: string; subtotal_line: string | null; grand_total_line: string | null }[]) {
+      if (r.subtotal_line) {
+        map.set(String(r.gl_account_number), {
+          subtotal_line: r.subtotal_line,
+          is_pl: PL_GRAND_TOTALS.has(r.grand_total_line ?? ""),
+        });
+      }
     }
-  }
-  return map;
+    return map;
+  });
 }
 
 /** Maps Sage department names -> budget BU */
 export async function loadBuMapping(): Promise<Map<string, string>> {
-  const supabase = getSupabase();
-  const { data } = await supabase
-    .from("dim_bu_mapping")
-    .select("source_identifier, budget_bu")
-    .eq("is_active", true)
-    .eq("source_system", "sage");
-
+  const rows = await loadBuMappingRows();
   const map = new Map<string, string>();
-  for (const row of (data ?? []) as { source_identifier: string; budget_bu: string }[]) {
+  for (const row of rows) {
     map.set(row.source_identifier, row.budget_bu);
   }
   return map;
@@ -136,31 +118,20 @@ export async function loadBuMapping(): Promise<Map<string, string>> {
 
 /** Maps Sage department IDs (D300, D301...) -> budget BU */
 export async function loadBuMappingByDeptId(): Promise<Map<string, string>> {
-  const supabase = getSupabase();
-
-  const { data: mappings } = await supabase
-    .from("dim_bu_mapping")
-    .select("source_identifier, budget_bu")
-    .eq("is_active", true)
-    .eq("source_system", "sage");
-
-  const { data: departments } = await supabase
-    .from("intacct_departments")
-    .select("department_id, title");
-
-  if (!mappings || !departments) return new Map();
+  const [rows, deptMap] = await Promise.all([
+    loadBuMappingRows(),
+    loadDeptIdToName(),
+  ]);
 
   const nameToId = new Map<string, string>();
-  for (const d of departments as { department_id: string; title: string }[]) {
-    nameToId.set(d.title, d.department_id);
+  for (const [id, name] of deptMap) {
+    nameToId.set(name, id);
   }
 
   const map = new Map<string, string>();
-  for (const row of mappings as { source_identifier: string; budget_bu: string }[]) {
+  for (const row of rows) {
     const deptId = nameToId.get(row.source_identifier);
-    if (deptId) {
-      map.set(deptId, row.budget_bu);
-    }
+    if (deptId) map.set(deptId, row.budget_bu);
   }
   return map;
 }

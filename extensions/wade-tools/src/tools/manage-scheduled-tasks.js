@@ -2,7 +2,7 @@ import { getSupabase } from "../db.js";
 import { textResult } from "../types.js";
 export const definition = {
     name: "manage_scheduled_tasks",
-    description: "Manage scheduled tasks (cron jobs). Actions: 'list' to see all tasks, 'create' to add a new one, 'update' to modify an existing one, 'delete' to remove one, 'enable'/'disable' to toggle. Tasks run automatically on the cron schedule.",
+    description: "Manage scheduled tasks (cron jobs). Actions: 'list' to see all tasks, 'create' to add a new one, 'update' to modify, 'delete' to remove, 'enable'/'disable' to toggle. IMPORTANT: For create/update/delete, show the details to the user first and only call after explicit approval.",
     parameters: {
         type: "object",
         properties: {

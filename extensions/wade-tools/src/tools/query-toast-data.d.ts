@@ -10,7 +10,7 @@ export declare const definition: {
                 enum: string[];
                 description: string;
             };
-            restaurant_guid: {
+            location: {
                 type: string;
                 description: string;
             };

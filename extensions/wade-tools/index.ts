@@ -3,8 +3,6 @@ import type { OpenClawApi } from "./src/types.js";
 // Financial query tools
 import * as queryRampSpend from "./src/tools/query-ramp-spend.js";
 import * as querySageGl from "./src/tools/query-sage-gl.js";
-import * as queryFpaData from "./src/tools/query-fpa-data.js";
-import * as queryHeadcount from "./src/tools/query-headcount.js";
 import * as queryToastData from "./src/tools/query-toast-data.js";
 
 // Utility tools
@@ -22,15 +20,10 @@ import {
 
 // External tools
 import * as searchWeb from "./src/tools/search-web.js";
-import * as readGithubFile from "./src/tools/read-github-file.js";
 import * as manageScheduledTasks from "./src/tools/manage-scheduled-tasks.js";
 
-// Side-effect tools (email, calendar, action approval)
-import {
-  sendEmailDef, sendEmailExecute,
-  approveActionDef, approveActionExecute,
-  rejectActionDef, rejectActionExecute,
-} from "./src/tools/email.js";
+// Side-effect tools (email, calendar)
+import { sendEmailDef, sendEmailExecute } from "./src/tools/email.js";
 import {
   createCalendarEventDef, createCalendarEventExecute,
   getCalendarAvailabilityDef, getCalendarAvailabilityExecute,
@@ -39,7 +32,12 @@ import {
 
 export default function (api: OpenClawApi) {
 
-  // ── Financial query tools (read-only, always available) ──
+  // ── Data tools ──
+
+  api.registerTool({
+    ...querySupabase.definition,
+    execute: querySupabase.execute,
+  });
 
   api.registerTool({
     ...queryRampSpend.definition,
@@ -52,26 +50,11 @@ export default function (api: OpenClawApi) {
   });
 
   api.registerTool({
-    ...queryFpaData.definition,
-    execute: queryFpaData.execute,
-  });
-
-  api.registerTool({
-    ...queryHeadcount.definition,
-    execute: queryHeadcount.execute,
-  });
-
-  api.registerTool({
     ...queryToastData.definition,
     execute: queryToastData.execute,
   });
 
-  // ── Utility tools (read-only, always available) ──
-
-  api.registerTool({
-    ...querySupabase.definition,
-    execute: querySupabase.execute,
-  });
+  // ── Utility tools ──
 
   api.registerTool({
     ...queryFinancialData.definition,
@@ -88,7 +71,7 @@ export default function (api: OpenClawApi) {
     execute: retrieveRampInvoice.execute,
   });
 
-  // ── Memory tools (always available) ──
+  // ── Memory tools ──
 
   api.registerTool({
     ...saveMemoryDef,
@@ -105,29 +88,24 @@ export default function (api: OpenClawApi) {
     execute: forgetMemory,
   });
 
-  // ── External tools (read-only, always available) ──
+  // ── External tools ──
 
   api.registerTool({
     ...searchWeb.definition,
     execute: searchWeb.execute,
   });
 
-  api.registerTool({
-    ...readGithubFile.definition,
-    execute: readGithubFile.execute,
-  });
-
-  // ── Side-effect tools (optional — must be enabled in agent config) ──
+  // ── Side-effect tools ──
 
   api.registerTool({
     ...sendEmailDef,
     execute: sendEmailExecute,
-  }, { optional: true });
+  });
 
   api.registerTool({
     ...createCalendarEventDef,
     execute: createCalendarEventExecute,
-  }, { optional: true });
+  });
 
   api.registerTool({
     ...getCalendarAvailabilityDef,
@@ -142,15 +120,5 @@ export default function (api: OpenClawApi) {
   api.registerTool({
     ...manageScheduledTasks.definition,
     execute: manageScheduledTasks.execute,
-  }, { optional: true });
-
-  api.registerTool({
-    ...approveActionDef,
-    execute: approveActionExecute,
-  }, { optional: true });
-
-  api.registerTool({
-    ...rejectActionDef,
-    execute: rejectActionExecute,
-  }, { optional: true });
+  });
 }

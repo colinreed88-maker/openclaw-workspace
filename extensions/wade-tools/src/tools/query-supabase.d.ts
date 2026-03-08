@@ -13,12 +13,52 @@ export declare const definition: {
                 type: string;
                 description: string;
             };
-            filters: {
+            eq_filters: {
+                type: string;
+                description: string;
+                additionalProperties: boolean;
+            };
+            gte_filters: {
                 type: string;
                 description: string;
                 additionalProperties: {
                     type: string;
                 };
+            };
+            lte_filters: {
+                type: string;
+                description: string;
+                additionalProperties: {
+                    type: string;
+                };
+            };
+            in_filters: {
+                type: string;
+                description: string;
+                additionalProperties: {
+                    type: string;
+                    items: {
+                        type: string;
+                    };
+                };
+            };
+            ilike_filters: {
+                type: string;
+                description: string;
+                additionalProperties: {
+                    type: string;
+                };
+            };
+            or_filter: {
+                type: string;
+                description: string;
+            };
+            not_null: {
+                type: string;
+                items: {
+                    type: string;
+                };
+                description: string;
             };
             order_by: {
                 type: string;
@@ -32,8 +72,17 @@ export declare const definition: {
                 type: string;
                 description: string;
             };
+            rpc_name: {
+                type: string;
+                description: string;
+            };
+            rpc_params: {
+                type: string;
+                description: string;
+                additionalProperties: boolean;
+            };
         };
-        required: string[];
+        required: never[];
     };
 };
 export declare function execute(_id: string, params: Record<string, unknown>): Promise<ToolResult>;

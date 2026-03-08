@@ -11,52 +11,41 @@ import {
 } from "../bu-mapping.js";
 import { textResult, type ToolResult } from "../types.js";
 
+const GL_DETAIL_COLUMNS = "entry_date, account_no, account_title, department_id, location_id, amount, description, document_no, batch_title";
+const MONTHLY_BALANCE_COLUMNS = "year_month, department_id, entity_id, account_no, net_amount, debit_total, credit_total, line_count";
+
 export const definition = {
   name: "query_sage_gl",
   description:
-    "Query Sage Intacct GL data (journal entries, monthly balances by department) directly from structured tables. ALWAYS use this for any question about GL detail, journal entries, account balances, or Sage accounting data. Resolves BU from department via dim_bu_mapping. Do NOT use query_financial_data for GL questions.",
+    "Query Sage Intacct GL data — journal entries or monthly department balances. Supports pnl_bucket grouping which maps GL accounts to P&L line items via dim_fs_mapping. Use this for department P&L summaries, GL detail, or account balance analysis.",
   parameters: {
     type: "object",
     properties: {
       business_unit: {
         type: "string",
-        description:
-          'Filter to a specific BU. Must be exact: "Executive", "Tech", "Growth & Revenue", "F&B", "Hotel", "Property Mgmt", "Real Estate & Dev", "Shared Services", "MENA". Resolved via dim_bu_mapping.',
+        description: 'Exact BU. Resolves to Sage department IDs via dim_bu_mapping.',
       },
       department: {
         type: "string",
-        description:
-          'Filter by budget department name (e.g. "Finance", "People", "Legal", "Engineering"). Resolves via dim_bu_mapping to the correct set of Sage department IDs. PREFERRED over department_id when asking about a department.',
+        description: 'Budget department name (e.g. "Finance"). Resolves via dim_bu_mapping. Preferred over department_id.',
       },
       department_id: {
         type: "string",
-        description: "Sage department ID (e.g. Asset Management, Marketing). Exact match. Use 'department' instead when filtering by budget department.",
+        description: "Sage department ID. Use 'department' instead when filtering by budget department.",
       },
-      entity_id: {
-        type: "string",
-        description: "Sage entity/location ID.",
-      },
-      account_no: {
-        type: "string",
-        description: "GL account number (e.g. 63570).",
-      },
-      date_from: {
-        type: "string",
-        description: "Start date (YYYY-MM-DD) for GL detail, or year_month (YYYY-MM) for monthly balances.",
-      },
-      date_to: {
-        type: "string",
-        description: "End date (YYYY-MM-DD) for GL detail, or year_month (YYYY-MM) for monthly balances.",
-      },
+      entity_id: { type: "string", description: "Sage entity/location ID." },
+      account_no: { type: "string", description: "GL account number (e.g. 63570)." },
+      date_from: { type: "string", description: "YYYY-MM-DD for gl_detail, YYYY-MM for monthly balances." },
+      date_to: { type: "string", description: "YYYY-MM-DD for gl_detail, YYYY-MM for monthly balances." },
       source: {
         type: "string",
         enum: ["gl_detail", "monthly_dept_balances"],
-        description: "Which table to query. gl_detail = individual journal entries, monthly_dept_balances = pre-aggregated monthly by dept+account. Default: monthly_dept_balances.",
+        description: "gl_detail = journal entries, monthly_dept_balances = pre-aggregated. Default: monthly_dept_balances.",
       },
       group_by: {
         type: "string",
         enum: ["department", "account", "entity", "month", "business_unit", "pnl_bucket"],
-        description: "How to aggregate results. 'pnl_bucket' groups GL accounts into P&L line items using dim_fs_mapping — USE THIS for department P&L summaries. Default: department.",
+        description: "pnl_bucket groups GL accounts into P&L line items — use for department P&L summaries. Default: department.",
       },
       limit: { type: "number", description: "Max rows (default 50)." },
     },
@@ -77,18 +66,20 @@ export async function execute(_id: string, params: Record<string, unknown>): Pro
   const groupBy = (params.group_by as string) ?? "department";
   const limit = (params.limit as number) ?? 50;
 
+  // Resolve department name to Sage department IDs
   let budgetDeptFilter: string[] | null = null;
   if (department) {
     const deptNames = await resolveBudgetDeptToSageDepts(department);
     if (deptNames.length === 0) {
-      return textResult({ error: `No Sage departments mapped to budget department "${department}".` });
+      return textResult({ error: `No Sage departments mapped to "${department}".` });
     }
     budgetDeptFilter = await resolveDeptNamesToIds(deptNames);
     if (budgetDeptFilter.length === 0) {
-      return textResult({ error: `Sage departments found for "${department}" but no matching department_id codes in intacct_departments.` });
+      return textResult({ error: `No department_id codes found for "${department}".` });
     }
   }
 
+  // Resolve BU to department IDs
   let buDeptFilter: string[] | null = null;
   if (businessUnit) {
     const buMap = await loadBuMapping();
@@ -106,7 +97,7 @@ export async function execute(_id: string, params: Record<string, unknown>): Pro
   if (source === "gl_detail") {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let q = (supabase.from("intacct_gl_detail") as any)
-      .select("*")
+      .select(GL_DETAIL_COLUMNS)
       .order("entry_date", { ascending: false })
       .limit(limit);
 
@@ -130,7 +121,6 @@ export async function execute(_id: string, params: Record<string, unknown>): Pro
 
     return textResult({
       source: "intacct_gl_detail",
-      filters_applied: { business_unit: businessUnit ?? "ALL", department, department_id: departmentId, sage_dept_ids_resolved: effectiveDeptFilter, entity_id: entityId, account_no: accountNo, date_from: dateFrom, date_to: dateTo },
       row_count: enriched.length,
       rows: enriched,
     });
@@ -139,7 +129,7 @@ export async function execute(_id: string, params: Record<string, unknown>): Pro
   // monthly_dept_balances (default)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let q = (supabase.from("intacct_monthly_dept_balances") as any)
-    .select("*")
+    .select(MONTHLY_BALANCE_COLUMNS)
     .order("year_month", { ascending: false })
     .limit(5000);
 
@@ -183,8 +173,7 @@ export async function execute(_id: string, params: Record<string, unknown>): Pro
     if (groupBy === "department") key = deptNameMap.get(key) ?? key;
     if (groupBy === "pnl_bucket") {
       const entry = fsMap.get(key);
-      if (!entry) continue;
-      if (!entry.is_pl) continue;
+      if (!entry || !entry.is_pl) continue;
       key = entry.subtotal_line;
     }
     if (groupBy === "account") {
@@ -205,7 +194,7 @@ export async function execute(_id: string, params: Record<string, unknown>): Pro
 
   return textResult({
     source: "intacct_monthly_dept_balances",
-    filters_applied: { business_unit: businessUnit ?? "ALL", department, department_id: departmentId, sage_dept_ids_resolved: effectiveDeptFilter, entity_id: entityId, account_no: accountNo, date_from: dateFrom, date_to: dateTo, group_by: groupBy },
+    group_by: groupBy,
     row_count: sorted.length,
     rows: sorted.map((r) => ({ ...r, net_amount: Math.round(r.net_amount * 100) / 100 })),
   });

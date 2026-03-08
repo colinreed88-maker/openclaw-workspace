@@ -1,5 +1,3 @@
-export declare const DEPT_ALIASES: Record<string, string[]>;
-export declare const FPA_DEPT_TO_BU: Record<string, string>;
 export declare function resolveBudgetDeptToSageDepts(budgetDept: string): Promise<string[]>;
 export declare function resolveDeptNamesToIds(deptNames: string[]): Promise<string[]>;
 export declare function loadDeptIdToName(): Promise<Map<string, string>>;

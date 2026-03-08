@@ -1,11 +1,11 @@
-## Data Landscape
+## Data Dictionary
 
 ### Supabase Tables by Domain
 
 **FP&A (Budget & Forecast)**
 - `fpa_scenarios` — scenario registry (F1 Forecast, F2, Budget, Prior Year). Filter by `is_active`.
 - `fpa_pnl_monthly` — consolidated monthly P&L by scenario (section, category, line_item, month, amount).
-- `fpa_dept_pnl` / `fpa_dept_pnl_monthly` — department-level P&L (annual and monthly). Keyed by scenario, business_unit, department, line_item.
+- `fpa_dept_pnl_monthly` — department-level monthly P&L. Keyed by scenario_id, business_unit, department, line_item.
 - `fpa_headcount_monthly` — FTE counts by department and month.
 - `fpa_employees` — employee/contractor roster from the forecast model.
 - `fpa_vendors` — vendor spend by department/category (software, contractors, prof_services, travel, other).
@@ -13,22 +13,19 @@
 - `fpa_dept_gl_detail` — GL-level detail by department, parent_category, gl_code.
 
 **Sage Intacct (Actuals / GL)**
-- `intacct_gl_detail` — ~1M journal entry lines (Dec 2020–present). Keyed by RECORDNO (text).
-- `intacct_monthly_dept_balances` — pre-aggregated GL by entity, department, account, year_month.
-- `intacct_accounts` — chart of accounts (518 accounts).
-- `intacct_entities` — 43 legal entities (E100–E920). OpCo = E120, Flow FS = E215, Properties = E501–E508/E515/E516.
-- `intacct_departments` — ~128 ERP departments.
+- `intacct_gl_detail` — ~1M journal entry lines (Dec 2020–present). Key columns: entry_date, account_no, account_title, department_id, location_id, amount, description, document_no.
+- `intacct_monthly_dept_balances` — pre-aggregated GL by entity, department, account, year_month. Key columns: year_month, department_id, entity_id, account_no, net_amount, debit_total, credit_total, line_count.
+- `intacct_accounts` — chart of accounts (518 accounts). account_no, title.
+- `intacct_entities` — 43 legal entities (E100–E920).
+- `intacct_departments` — ~128 ERP departments. department_id, title.
 
 **Ramp (Expense Management)**
-- `ramp_transactions` — card transactions (amount, merchant, BU, sage dept, card holder).
-- `ramp_bills` — vendor bills/invoices with PDF storage.
+- `ramp_transactions` — card transactions. Key columns: amount, merchant_name, business_unit, sage_dept_name, sage_entity_name, transaction_date, card_holder_name, state. Filter: `state IN ['CLEARED', 'PENDING']`.
+- `ramp_bills` — vendor bills/invoices. Key columns: amount, vendor_name, business_unit, sage_dept_name, sage_entity_name, posting_date, issued_at, status. Date filter: use `posting_date` (primary), fall back to `issued_at` when null.
 - `ramp_trips` — T&E trips with route and spend.
 
-**Toast (F&B / POS)**
-- `toast_orders` / `toast_order_items` / `toast_payments` — POS data by location.
-- `toast_time_entries` — labor hours, wages by employee.
-- `toast_menu_items` — menu catalog by location.
-- Locations: Flow Grocer, Flow Station, Flow Food Truck, Flow Pool.
+**Toast (F&B / POS)** — Use `query_toast_data` with RPC metrics (daily_sales, labor, top_items, category_sales, payment_mix, hourly_sales, server_performance, employee_performance, ticket_time, discount_void, dining_options). Use metric "orders" for raw order data.
+- Locations: Grocer, Station, Food Truck, Pool.
 
 **Property P&L**
 - `prop_pnl_actuals` / `prop_pnl_budget` / `prop_pnl_gl` / `prop_pnl_pricing` / `prop_pnl_marketing` / `prop_pnl_rented_units`.
@@ -44,28 +41,34 @@
 - `mbr_rippling_headcount_weekly` — weekly headcount snapshots.
 
 **System Config**
-- `app_config` — key-value config table. Key `mbr_last_closed_month` = latest month Sage data is closed through (e.g. "2026-01"). Query via query_supabase before reporting actuals.
+- `app_config` — key-value config table. Key `mbr_last_closed_month` = latest month Sage data is closed through.
 
 **BU Mapping**
 - `dim_bu_mapping` — source key to budget_bu (source_system: sage, budget, rippling, roster).
 - `dim_bu_scopes` — BU scope classification (opco, mena, consolidated_re).
 
-### Tool Routing
+---
 
-| Question type | Tool | Never use |
-|---|---|---|
-| Ramp spend, vendor totals, card expenses | `query_ramp_spend` (supports `department` param) | query_financial_data |
-| GL detail, journal entries, Sage balances | `query_sage_gl` (supports `department` param) | query_financial_data |
-| Budget, forecast, FPA line items | `query_fpa_data` | query_financial_data |
-| Month-end close status | `query_supabase` (table: app_config, key: mbr_last_closed_month) | — |
-| Headcount, employees, roster | `query_headcount` | query_financial_data |
-| F&B revenue, Toast sales, labor | `query_toast_data` | query_financial_data |
-| Qualitative, SOPs, debt docs, business context | `query_financial_data` | — |
-| Specific document or file download | `retrieve_knowledge_doc` | — |
-| Corrections, preferences, known rules | `search_memories` | — |
-| Current web info, news, rates | `search_web` | — |
-| Codebase files, config, code review | `read_github_file` | — |
-| Ramp invoice PDF | `retrieve_ramp_invoice` | — |
+### Available Tools
+
+| Tool | Purpose |
+|------|---------|
+| `query_supabase` | Primary data tool. Query any table with full filter support (eq, gte, lte, in, ilike, or, not_null) or call Supabase RPCs. |
+| `query_ramp_spend` | Merges ramp_transactions + ramp_bills, aggregates by dimension (vendor, department, business_unit, month, entity). Use when you need combined card + bill spend. |
+| `query_sage_gl` | GL detail or monthly department balances with pnl_bucket grouping. Use for P&L summaries and actuals. |
+| `query_toast_data` | F&B metrics via Postgres RPCs (daily_sales, labor, top_items, etc.). Matches intranet FB Dashboard exactly. |
+| `query_financial_data` | RAG proxy for qualitative questions, SOPs, debt docs. NOT for structured data. |
+| `retrieve_knowledge_doc` | Document search and download. |
+| `retrieve_ramp_invoice` | Ramp invoice PDF retrieval. |
+| `search_web` | Current web info, news, rates. |
+| `save_memory` / `search_memories` / `forget_memory` | Persistent memory for corrections, preferences, rules. |
+| `send_email` | Send email via Resend. Show draft first, call after approval. |
+| `create_calendar_event` | Create Google Calendar event. Show details first, call after approval. |
+| `get_calendar_availability` | Check free/busy for attendees. |
+| `list_upcoming_events` | List upcoming calendar events. |
+| `manage_scheduled_tasks` | CRUD for scheduled cron tasks. Show details first, call after approval for create/update/delete. |
+
+---
 
 ### Business Unit Reference
 
@@ -74,7 +77,7 @@ Budget-only BUs: 3rd Party Revenue, Building Elimination, FM, FFL, Condos, Unall
 
 ### Budget Department → Sage Departments
 
-Each BU contains budget departments that span multiple Sage ERP departments. When someone says "Finance department", use the `department` parameter — it resolves via dim_bu_mapping to the correct set of Sage departments.
+Each BU contains budget departments that span multiple Sage ERP departments. Use the `department` parameter on `query_ramp_spend` and `query_sage_gl` — it resolves via `dim_bu_mapping` to the correct set of Sage departments.
 
 Key mappings:
 - **Finance** → Finance, Corporate Accounting, Accounts Payable, Strategic Finance, Property Accounting
@@ -84,7 +87,7 @@ Key mappings:
 - **Marketing** → Marketing, Leasing, Pricing, Data Analytics, Brokerage
 - **Food and Beverage** → Food and Beverage, Food and Beverage - Miami, Food and Beverage - FTL
 
-Always use the `department` parameter (not `business_unit`) when the user asks about a specific department. The tool resolves it automatically.
+Always use the `department` parameter (not `business_unit`) when the user asks about a specific department.
 
 ### Entity Quick Reference
 

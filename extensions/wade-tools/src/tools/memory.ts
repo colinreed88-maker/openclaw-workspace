@@ -1,5 +1,4 @@
 import { getSupabase } from "../db.js";
-import { generateEmbedding } from "../embeddings.js";
 import { textResult, type ToolResult } from "../types.js";
 
 export const saveMemoryDef = {
@@ -27,7 +26,7 @@ export const saveMemoryDef = {
 export const searchMemoriesDef = {
   name: "search_memories",
   description:
-    "Search persistent memories for relevant context, corrections, and past mistakes. ALWAYS search memories before answering financial questions to check for known corrections.",
+    "Search persistent memories for relevant context, corrections, and past mistakes. Search memories before answering financial questions to check for known corrections.",
   parameters: {
     type: "object",
     properties: {
@@ -40,13 +39,13 @@ export const searchMemoriesDef = {
 export const forgetMemoryDef = {
   name: "forget_memory",
   description:
-    "Removes a previously saved memory. Use when the user says to forget something, stop doing something, or a previous fact/rule no longer applies. Searches by semantic similarity and deletes the best match.",
+    "Remove a previously saved memory. Use when the user says to forget something or a previous fact/rule no longer applies. Searches by text match and deletes the best match.",
   parameters: {
     type: "object",
     properties: {
       query: {
         type: "string",
-        description: "Description of the memory to forget. Will be matched by semantic similarity.",
+        description: "Description of the memory to forget. Will be matched by text search.",
       },
     },
     required: ["query"],
@@ -59,21 +58,11 @@ export async function saveMemory(_id: string, params: Record<string, unknown>): 
   const type = params.type as string;
   const correctionDetail = params.correction_detail as string | undefined;
 
-  const embeddingText = correctionDetail ? `${content} ${correctionDetail}` : content;
-
-  let embedding: number[] | null = null;
-  try {
-    embedding = await generateEmbedding(embeddingText);
-  } catch (err) {
-    console.warn("[wade-tools] Embedding generation failed for save_memory, saving without:", err);
-  }
-
   const { error } = await supabase.from("agent_memories").insert({
     content,
     type,
     correction_detail: correctionDetail ?? null,
     relevance_score: 1.0,
-    ...(embedding ? { embedding: JSON.stringify(embedding) } : {}),
   });
 
   if (error) return textResult({ error: error.message });
@@ -83,20 +72,6 @@ export async function saveMemory(_id: string, params: Record<string, unknown>): 
 export async function searchMemories(_id: string, params: Record<string, unknown>): Promise<ToolResult> {
   const supabase = getSupabase();
   const query = params.query as string;
-
-  try {
-    const embedding = await generateEmbedding(query);
-    const { data, error } = await supabase.rpc("match_memories", {
-      query_embedding: JSON.stringify(embedding),
-      match_count: 10,
-      similarity_threshold: 0.5,
-    });
-    if (!error && data?.length) {
-      return textResult(data);
-    }
-  } catch (err) {
-    console.warn("[wade-tools] Vector search failed, falling back to text:", err);
-  }
 
   const { data, error } = await supabase
     .from("agent_memories")
@@ -115,34 +90,27 @@ export async function forgetMemory(_id: string, params: Record<string, unknown>)
 
   if (!query?.trim()) return textResult({ error: "Query is required." });
 
-  try {
-    const embedding = await generateEmbedding(query);
-    const { data: matches } = await supabase.rpc("match_memories", {
-      query_embedding: JSON.stringify(embedding),
-      match_count: 1,
-      similarity_threshold: 0.6,
-    });
+  const { data: matches, error: searchErr } = await supabase
+    .from("agent_memories")
+    .select("id, type, content")
+    .or(`content.ilike.%${query}%,correction_detail.ilike.%${query}%`)
+    .order("relevance_score", { ascending: false })
+    .limit(1);
 
-    if (!matches || matches.length === 0) {
-      return textResult({ found: false, message: "No matching memory found to forget." });
-    }
+  if (searchErr) return textResult({ error: searchErr.message });
+  if (!matches?.length) return textResult({ found: false, message: "No matching memory found to forget." });
 
-    const match = matches[0] as { id: string; type: string; content: string };
-    const { error: delErr } = await supabase
-      .from("agent_memories")
-      .delete()
-      .eq("id", match.id);
+  const match = matches[0] as { id: string; type: string; content: string };
+  const { error: delErr } = await supabase
+    .from("agent_memories")
+    .delete()
+    .eq("id", match.id);
 
-    if (delErr) {
-      return textResult({ error: "Found the memory but failed to delete it." });
-    }
+  if (delErr) return textResult({ error: "Found the memory but failed to delete it." });
 
-    return textResult({
-      success: true,
-      forgotten: { type: match.type, content: match.content },
-      message: `Forgotten: "${match.content}"`,
-    });
-  } catch (err) {
-    return textResult({ error: err instanceof Error ? err.message : String(err) });
-  }
+  return textResult({
+    success: true,
+    forgotten: { type: match.type, content: match.content },
+    message: `Forgotten: "${match.content}"`,
+  });
 }

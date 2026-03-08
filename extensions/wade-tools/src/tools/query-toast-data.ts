@@ -1,31 +1,55 @@
 import { getSupabase } from "../db.js";
 import { textResult, type ToolResult } from "../types.js";
 
+// Toast location map (from flow-intranet/lib/toast-locations.ts)
+const LOCATIONS: Record<string, string> = {
+  grocer: "2c0dabcf-3505-4784-af53-06231467397b",
+  "flow grocer": "2c0dabcf-3505-4784-af53-06231467397b",
+  station: "b2369f42-159d-4fd7-add5-5c1ffe1e09ac",
+  "flow station": "b2369f42-159d-4fd7-add5-5c1ffe1e09ac",
+  "food truck": "669c4464-eccf-4119-a7cd-137f61b1c7ff",
+  "flow food truck": "669c4464-eccf-4119-a7cd-137f61b1c7ff",
+  pool: "9b4ec467-171d-4af2-8892-67c7be772f5b",
+  "flow pool": "9b4ec467-171d-4af2-8892-67c7be772f5b",
+};
+
+const METRIC_TO_RPC: Record<string, string> = {
+  daily_sales: "fb_daily_sales",
+  labor: "fb_labor_by_day",
+  top_items: "fb_top_items",
+  category_sales: "fb_category_sales",
+  payment_mix: "fb_payment_mix",
+  hourly_sales: "fb_hourly_sales",
+  server_performance: "fb_server_performance",
+  employee_performance: "fb_employee_performance",
+  ticket_time: "fb_daily_ticket_time",
+  discount_void: "fb_discount_void_daily",
+  dining_options: "fb_dining_options",
+};
+
 export const definition = {
   name: "query_toast_data",
   description:
-    "Query Toast POS / F&B data directly from structured tables. ALWAYS use this for restaurant revenue, food sales, labor hours, menu item performance, or F&B metrics. Do NOT use query_financial_data for F&B/Toast questions.",
+    "Query Toast POS / F&B data using the same Postgres RPCs as the Flow Intranet FB Dashboard. Returns aggregated metrics by location and date. Locations: Grocer, Station, Food Truck, Pool.",
   parameters: {
     type: "object",
     properties: {
       metric: {
         type: "string",
-        enum: ["daily_sales", "labor", "top_items", "category_sales", "payment_mix", "orders"],
-        description: "What to query. daily_sales = revenue by day, labor = labor hours/cost, top_items = best-selling items, category_sales = by sales category, payment_mix = payment types, orders = individual orders.",
+        enum: [
+          "daily_sales", "labor", "top_items", "category_sales", "payment_mix",
+          "hourly_sales", "server_performance", "employee_performance",
+          "ticket_time", "discount_void", "dining_options", "orders",
+        ],
+        description: "daily_sales=revenue by day, labor=labor hours/cost, top_items=best sellers, category_sales=by category, payment_mix=payment types, hourly_sales=by hour, server_performance=by server, employee_performance=by employee, ticket_time=order duration, discount_void=discounts/voids, dining_options=dine-in/takeout, orders=raw individual orders.",
       },
-      restaurant_guid: {
+      location: {
         type: "string",
-        description: "Filter to specific restaurant location. Omit for all locations.",
+        description: 'Location name: "Grocer", "Station", "Food Truck", "Pool". Omit for all locations.',
       },
-      date_from: {
-        type: "string",
-        description: "Start date (YYYY-MM-DD).",
-      },
-      date_to: {
-        type: "string",
-        description: "End date (YYYY-MM-DD).",
-      },
-      limit: { type: "number", description: "Max rows (default 30)." },
+      date_from: { type: "string", description: "Start date (YYYY-MM-DD). For RPC metrics, this sets the since_date." },
+      date_to: { type: "string", description: "End date (YYYY-MM-DD). Only used for 'orders' metric." },
+      limit: { type: "number", description: "Max rows (default 50)." },
     },
     required: ["metric"],
   },
@@ -34,176 +58,18 @@ export const definition = {
 export async function execute(_id: string, params: Record<string, unknown>): Promise<ToolResult> {
   const supabase = getSupabase();
   const metric = params.metric as string;
-  const restaurantGuid = params.restaurant_guid as string | undefined;
+  const locationInput = params.location as string | undefined;
   const dateFrom = params.date_from as string | undefined;
   const dateTo = params.date_to as string | undefined;
-  const limit = (params.limit as number) ?? 30;
+  const limit = (params.limit as number) ?? 50;
 
-  if (metric === "daily_sales") {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let q = (supabase.from("toast_orders") as any)
-      .select("*")
-      .order("business_date", { ascending: false })
-      .limit(5000);
-
-    if (restaurantGuid) q = q.eq("restaurant_guid", restaurantGuid);
-    if (dateFrom) q = q.gte("business_date", dateFrom);
-    if (dateTo) q = q.lte("business_date", dateTo);
-
-    const { data, error } = await q;
-    if (error) return textResult({ error: error.message });
-
-    const rows = (data ?? []) as Record<string, unknown>[];
-    const daily = new Map<string, { date: string; revenue: number; orders: number; guests: number; tips: number }>();
-    for (const row of rows) {
-      const date = (row.business_date as string) ?? "unknown";
-      const existing = daily.get(date) ?? { date, revenue: 0, orders: 0, guests: 0, tips: 0 };
-      existing.revenue += Number(row.total_amount) || 0;
-      existing.orders += 1;
-      existing.guests += Number(row.guest_count) || 0;
-      existing.tips += Number(row.tip_amount) || 0;
-      daily.set(date, existing);
-    }
-
-    const sorted = Array.from(daily.values())
-      .sort((a, b) => b.date.localeCompare(a.date))
-      .slice(0, limit)
-      .map((r) => ({ ...r, revenue: Math.round(r.revenue * 100) / 100, tips: Math.round(r.tips * 100) / 100 }));
-
-    return textResult({ source: "toast_orders", metric: "daily_sales", row_count: sorted.length, rows: sorted });
+  // Resolve location name to GUID
+  const restaurantGuid = locationInput ? LOCATIONS[locationInput.toLowerCase()] : undefined;
+  if (locationInput && !restaurantGuid) {
+    return textResult({ error: `Unknown location "${locationInput}". Valid: Grocer, Station, Food Truck, Pool.` });
   }
 
-  if (metric === "labor") {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let q = (supabase.from("toast_time_entries") as any)
-      .select("*")
-      .order("business_date", { ascending: false })
-      .limit(5000);
-
-    if (restaurantGuid) q = q.eq("restaurant_guid", restaurantGuid);
-    if (dateFrom) q = q.gte("business_date", dateFrom);
-    if (dateTo) q = q.lte("business_date", dateTo);
-
-    const { data, error } = await q;
-    if (error) return textResult({ error: error.message });
-
-    const rows = (data ?? []) as Record<string, unknown>[];
-    const daily = new Map<string, { date: string; regular_hours: number; overtime_hours: number; labor_cost: number; entries: number }>();
-    for (const row of rows) {
-      const date = (row.business_date as string) ?? "unknown";
-      const existing = daily.get(date) ?? { date, regular_hours: 0, overtime_hours: 0, labor_cost: 0, entries: 0 };
-      const regHrs = Number(row.regular_hours) || 0;
-      const otHrs = Number(row.overtime_hours) || 0;
-      const wage = Number(row.hourly_wage) || 0;
-      existing.regular_hours += regHrs;
-      existing.overtime_hours += otHrs;
-      existing.labor_cost += (regHrs + otHrs * 1.5) * wage;
-      existing.entries += 1;
-      daily.set(date, existing);
-    }
-
-    const sorted = Array.from(daily.values())
-      .sort((a, b) => b.date.localeCompare(a.date))
-      .slice(0, limit)
-      .map((r) => ({ ...r, regular_hours: Math.round(r.regular_hours * 100) / 100, overtime_hours: Math.round(r.overtime_hours * 100) / 100, labor_cost: Math.round(r.labor_cost * 100) / 100 }));
-
-    return textResult({ source: "toast_time_entries", metric: "labor", row_count: sorted.length, rows: sorted });
-  }
-
-  if (metric === "top_items") {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let q = (supabase.from("toast_order_items") as any)
-      .select("*")
-      .eq("voided", false)
-      .limit(10000);
-
-    if (restaurantGuid) q = q.eq("restaurant_guid", restaurantGuid);
-    if (dateFrom) q = q.gte("business_date", dateFrom);
-    if (dateTo) q = q.lte("business_date", dateTo);
-
-    const { data, error } = await q;
-    if (error) return textResult({ error: error.message });
-
-    const rows = (data ?? []) as Record<string, unknown>[];
-    const items = new Map<string, { item_name: string; quantity: number; revenue: number }>();
-    for (const row of rows) {
-      const name = (row.item_name as string) ?? "(unknown)";
-      const existing = items.get(name) ?? { item_name: name, quantity: 0, revenue: 0 };
-      existing.quantity += Number(row.quantity) || 0;
-      existing.revenue += Number(row.price) || 0;
-      items.set(name, existing);
-    }
-
-    const sorted = Array.from(items.values())
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, limit)
-      .map((r) => ({ ...r, revenue: Math.round(r.revenue * 100) / 100 }));
-
-    return textResult({ source: "toast_order_items", metric: "top_items", row_count: sorted.length, rows: sorted });
-  }
-
-  if (metric === "category_sales") {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let q = (supabase.from("toast_order_items") as any)
-      .select("*")
-      .eq("voided", false)
-      .limit(10000);
-
-    if (restaurantGuid) q = q.eq("restaurant_guid", restaurantGuid);
-    if (dateFrom) q = q.gte("business_date", dateFrom);
-    if (dateTo) q = q.lte("business_date", dateTo);
-
-    const { data, error } = await q;
-    if (error) return textResult({ error: error.message });
-
-    const rows = (data ?? []) as Record<string, unknown>[];
-    const cats = new Map<string, { category: string; quantity: number; revenue: number }>();
-    for (const row of rows) {
-      const cat = (row.sales_category as string) ?? "(uncategorized)";
-      const existing = cats.get(cat) ?? { category: cat, quantity: 0, revenue: 0 };
-      existing.quantity += Number(row.quantity) || 0;
-      existing.revenue += Number(row.price) || 0;
-      cats.set(cat, existing);
-    }
-
-    const sorted = Array.from(cats.values())
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, limit)
-      .map((r) => ({ ...r, revenue: Math.round(r.revenue * 100) / 100 }));
-
-    return textResult({ source: "toast_order_items", metric: "category_sales", row_count: sorted.length, rows: sorted });
-  }
-
-  if (metric === "payment_mix") {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let q = (supabase.from("toast_payments") as any)
-      .select("*")
-      .limit(10000);
-
-    if (restaurantGuid) q = q.eq("restaurant_guid", restaurantGuid);
-    if (dateFrom) q = q.gte("paid_date", dateFrom);
-    if (dateTo) q = q.lte("paid_date", dateTo);
-
-    const { data, error } = await q;
-    if (error) return textResult({ error: error.message });
-
-    const rows = (data ?? []) as Record<string, unknown>[];
-    const types = new Map<string, { payment_type: string; count: number; total_amount: number }>();
-    for (const row of rows) {
-      const ptype = (row.payment_type as string) ?? "(unknown)";
-      const existing = types.get(ptype) ?? { payment_type: ptype, count: 0, total_amount: 0 };
-      existing.count += 1;
-      existing.total_amount += Number(row.amount) || 0;
-      types.set(ptype, existing);
-    }
-
-    const sorted = Array.from(types.values())
-      .sort((a, b) => b.total_amount - a.total_amount)
-      .map((r) => ({ ...r, total_amount: Math.round(r.total_amount * 100) / 100 }));
-
-    return textResult({ source: "toast_payments", metric: "payment_mix", row_count: sorted.length, rows: sorted });
-  }
-
+  // Raw orders mode (not an RPC)
   if (metric === "orders") {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let q = (supabase.from("toast_orders") as any)
@@ -217,9 +83,43 @@ export async function execute(_id: string, params: Record<string, unknown>): Pro
 
     const { data, error } = await q;
     if (error) return textResult({ error: error.message });
-
     return textResult({ source: "toast_orders", metric: "orders", row_count: (data ?? []).length, rows: data ?? [] });
   }
 
-  return textResult({ error: `Unknown Toast metric: ${metric}` });
+  // RPC mode for all aggregated metrics
+  const rpcName = METRIC_TO_RPC[metric];
+  if (!rpcName) {
+    return textResult({ error: `Unknown metric: ${metric}` });
+  }
+
+  // Default since_date: 30 days ago if not provided
+  const sinceDate = dateFrom ?? daysAgo(30);
+
+  const { data, error } = await supabase.rpc(rpcName, { since_date: sinceDate });
+  if (error) return textResult({ error: `RPC ${rpcName} failed: ${error.message}` });
+
+  let rows = (data ?? []) as Record<string, unknown>[];
+
+  // Filter by location if specified (RPCs return all locations)
+  if (restaurantGuid) {
+    rows = rows.filter((r) => r.restaurant_guid === restaurantGuid);
+  }
+
+  // Apply limit
+  rows = rows.slice(0, limit);
+
+  return textResult({
+    source: `rpc:${rpcName}`,
+    metric,
+    location: locationInput ?? "all",
+    since_date: sinceDate,
+    row_count: rows.length,
+    rows,
+  });
+}
+
+function daysAgo(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString().split("T")[0];
 }
