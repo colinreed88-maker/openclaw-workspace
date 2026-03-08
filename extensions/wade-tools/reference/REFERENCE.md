@@ -60,6 +60,7 @@
 | `query_financial_data` | RAG proxy for qualitative questions, SOPs, debt docs. NOT for structured data. |
 | `retrieve_knowledge_doc` | Document search and download. |
 | `retrieve_ramp_invoice` | Ramp invoice PDF retrieval. |
+| `read_github_file` | Read files from Flow GitHub repos (flow-intranet, flow-ai-worker, openclaw-workspace). Use to understand how pages query data, how tools work, or to diagnose data discrepancies. |
 | `search_web` | Current web info, news, rates. |
 | `send_email` | Send email via Resend. Show draft first, call after approval. |
 | `create_calendar_event` | Create Google Calendar event. Show details first, call after approval. |
@@ -104,6 +105,7 @@ Always use the `department` parameter (not `business_unit`) when the user asks a
 
 ### Key Gotchas
 
+- **Multi-entity payroll**: Payroll/compensation expenses are booked across multiple entities. E120 (OpCo) AND E210 (FOL Management, the employment entity) both carry payroll for the same departments. When querying department P&L actuals, use `intacct_monthly_dept_balances` and include ALL OpCo-scope entities (from `intacct_book_entities` where `book_id = 'Top Exc CnP'`), excluding E9xx elimination entities. Do NOT filter to just E120 — you will undercount payroll by ~50%.
 - OpCo elimination removes intercompany management fees between OpCo and owned buildings (Society, Caoba) and F&B commissary revenue.
 - Flow FS master-leases hotel space — rent expense at FS = rental income at building level.
 - FPA scenarios: always filter by `is_active = true`. Current active scenarios change each forecast cycle.
