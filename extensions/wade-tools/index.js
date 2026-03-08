@@ -9,6 +9,7 @@ import * as retrieveKnowledgeDoc from "./src/tools/retrieve-knowledge-doc.js";
 import * as retrieveRampInvoice from "./src/tools/retrieve-ramp-invoice.js";
 // External tools
 import * as searchWeb from "./src/tools/search-web.js";
+import * as readGithubFile from "./src/tools/read-github-file.js";
 import * as manageScheduledTasks from "./src/tools/manage-scheduled-tasks.js";
 // Side-effect tools (email, calendar)
 import { sendEmailDef, sendEmailExecute } from "./src/tools/email.js";
@@ -48,6 +49,10 @@ export default function (api) {
     api.registerTool({
         ...searchWeb.definition,
         execute: searchWeb.execute,
+    });
+    api.registerTool({
+        ...readGithubFile.definition,
+        execute: readGithubFile.execute,
     });
     // ── Side-effect tools ──
     api.registerTool({
