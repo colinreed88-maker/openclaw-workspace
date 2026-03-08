@@ -108,7 +108,9 @@ Always use the `department` parameter (not `business_unit`) when the user asks a
 - **Multi-entity payroll**: Payroll/compensation expenses are booked across multiple entities. E120 (OpCo) AND E210 (FOL Management, the employment entity) both carry payroll for the same departments. When querying department P&L actuals, use `intacct_monthly_dept_balances` and include ALL OpCo-scope entities (from `intacct_book_entities` where `book_id = 'Top Exc CnP'`), excluding E9xx elimination entities. Do NOT filter to just E120 — you will undercount payroll by ~50%.
 - OpCo elimination removes intercompany management fees between OpCo and owned buildings (Society, Caoba) and F&B commissary revenue.
 - Flow FS master-leases hotel space — rent expense at FS = rental income at building level.
-- FPA scenarios: always filter by `is_active = true`. Current active scenarios change each forecast cycle.
+- **FPA date format**: `fpa_dept_pnl_monthly.month` is type DATE (YYYY-MM-DD), NOT YYYY-MM. Always use `'2026-01-01'` format. Using `'2026-01'` will cause a Postgres type error.
+- **FPA department names**: `fpa_dept_pnl_monthly.department` uses **budget department names** (e.g. "Finance", "Legal", "People"), NOT Sage department names. Filter with `department = "Finance"`, not individual Sage depts like "Strategic Finance" or "Accounts Payable".
+- **FPA active scenario**: Always filter `fpa_scenarios` by `is_active = true`. The active scenario may be "Budget" or "Forecast" depending on the cycle — do not assume it is always a Forecast. Use whatever `fpa_scenarios` returns as active. Always say "Forecast" when referring to FPA projections unless the active scenario is explicitly a Budget.
 - BU resolution: departments map to BUs via `dim_bu_mapping`. One department = one BU (enforced by unique constraint).
 - For department actuals questions, follow the workflow in FINANCIAL.md.
 
