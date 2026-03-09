@@ -1,8 +1,71 @@
 import { getSupabase } from "../db.js";
 import { textResult } from "../types.js";
+const BLOCKED_COMP_COLUMNS = [
+    "compensation", "salary", "hourly", "wage", "pay_rate", "base_pay",
+    "total_pay", "annual_comp", "annual base compensation",
+    "annual base compensation - currency", "annual compensation (usd)",
+];
+const COMP_SENSITIVE_TABLES = ["fpa_employees", "mbr_current_roster"];
+const SAFE_COLUMNS = {
+    fpa_employees: "id, scenario_id, employee_name, title, department, business_unit, status, employee_type, location, start_date, prop_corp, created_at",
+    mbr_current_roster: [
+        "id", "Rippling profile number", "Employee", "Legal first name", "Legal last name",
+        "Work email", "Employment type name", "Legal entity name", "Organization", "Department",
+        "Department Path", "Title", "Manager", "Level name", "Work location name",
+        "Work location - State", "Home address - State", "Work location - Country",
+        "Start date", "Original Start Date", "Current entity information - start date",
+        "Last day of work", "Employment status", "Termination type", "EE Type",
+        "Property v Corporate", "Reporting_Start Date", "Reporting_End Date",
+        "Tenure (yrs)", "Live Status", "Organization/BU", "Reporting_Dept", "Finance BU Partner",
+        "created_at",
+    ].map((c) => `"${c}"`).join(", "),
+};
+const COMP_REFUSAL = "Individual compensation data is not available through this tool. Use the MBR page or Supabase directly.";
+function isBlockedColumn(col) {
+    const lower = col.toLowerCase().trim().replace(/^"|"$/g, "");
+    return BLOCKED_COMP_COLUMNS.some((b) => lower === b || lower.includes(b));
+}
+function sanitizeSelect(table, select) {
+    const tableLower = table.toLowerCase();
+    if (!COMP_SENSITIVE_TABLES.includes(tableLower))
+        return select;
+    if (select.trim() === "*")
+        return SAFE_COLUMNS[tableLower] ?? select;
+    return select
+        .split(",")
+        .map((c) => c.trim())
+        .filter((c) => !isBlockedColumn(c))
+        .join(", ") || (SAFE_COLUMNS[tableLower] ?? "id");
+}
+function scrubCompFromRows(rows) {
+    return rows.map((row) => {
+        if (!row || typeof row !== "object")
+            return row;
+        const clean = {};
+        for (const [key, value] of Object.entries(row)) {
+            if (!isBlockedColumn(key))
+                clean[key] = value;
+        }
+        return clean;
+    });
+}
+function sqlReferencesComp(sql) {
+    const lower = sql.toLowerCase();
+    for (const col of BLOCKED_COMP_COLUMNS) {
+        if (lower.includes(col))
+            return true;
+    }
+    for (const table of COMP_SENSITIVE_TABLES) {
+        if (lower.includes(table) && /select\s+\*/i.test(sql))
+            return true;
+    }
+    return false;
+}
 export const definition = {
     name: "query_supabase",
     description: `Read-only query tool for any Supabase table or RPC. Primary data tool — use for direct table lookups, filtered queries, and RPC calls.
+
+Individual compensation columns are blocked and will not be returned. Use aggregate headcount/FTE data instead.
 
 KEY TABLES:
 - ramp_transactions: amount, merchant_name, business_unit, sage_dept_name, transaction_date, state, card_holder_name, is_bill_payment
@@ -11,7 +74,7 @@ KEY TABLES:
 - fpa_dept_pnl_monthly: scenario_id, business_unit, department, line_item, month, amount, sort_order
 - fpa_pnl_monthly: scenario_id, section (opco/mena/re_ops/consolidated), line_item, month, amount, sort_order
 - fpa_headcount_monthly: scenario_id, business_unit, department, month, fte
-- fpa_employees: scenario_id, business_unit, department, employee_name, status (AVOID comp columns)
+- fpa_employees: scenario_id, business_unit, department, employee_name, status, employee_type, location, start_date
 - fpa_vendors: scenario_id, department, vendor, category, amount
 - fpa_kpis: scenario_id, metric, value, sort_order
 - intacct_monthly_dept_balances: year_month, department_id, entity_id, account_no, net_amount
@@ -19,11 +82,9 @@ KEY TABLES:
 - intacct_accounts: account_no, title, status (518 rows)
 - intacct_departments: department_id, title
 - intacct_entities: entity_id, name
-- mbr_current_roster: Employee, "Organization/BU", Reporting_Dept, "Employment status" (AVOID comp columns)
+- mbr_current_roster: Employee, "Organization/BU", Reporting_Dept, "Employment status", Title, Department, Manager
 - app_config: key, value — key='mbr_last_closed_month' for close status
 - dim_bu_mapping: source_system, source_identifier, budget_bu, budget_department, forecast_department, is_active
-
-COMP COLUMNS TO NEVER SELECT: compensation, salary, hourly, wage, pay_rate, base_pay, total_pay, annual_comp
 
 For combined card + bill Ramp queries, use query_ramp_spend.
 For Sage GL with pnl_bucket grouping, use query_sage_gl.
@@ -100,13 +161,14 @@ export async function execute(_id, params) {
     // Raw SQL mode
     const rawSql = params.raw_sql;
     if (rawSql) {
+        if (sqlReferencesComp(rawSql))
+            return textResult({ error: COMP_REFUSAL });
         const limit = Math.min(params.limit ?? 200, 10000);
-        // Add LIMIT if not already present
         const sqlWithLimit = /\blimit\b/i.test(rawSql) ? rawSql : `${rawSql} LIMIT ${limit}`;
         const { data, error } = await supabase.rpc("execute_readonly_sql", { sql_query: sqlWithLimit });
         if (error)
             return textResult({ error: `SQL execution failed: ${error.message}` });
-        const rows = (data ?? []);
+        const rows = scrubCompFromRows((data ?? []));
         return textResult({
             source: "raw_sql",
             row_count: rows.length,
@@ -120,7 +182,7 @@ export async function execute(_id, params) {
         const { data, error } = await supabase.rpc(rpcName, rpcParams);
         if (error)
             return textResult({ error: `RPC ${rpcName} failed: ${error.message}` });
-        const rows = (data ?? []);
+        const rows = scrubCompFromRows((data ?? []));
         const limit = Math.min(params.limit ?? 50, 10000);
         return textResult({
             source: `rpc:${rpcName}`,
@@ -132,7 +194,7 @@ export async function execute(_id, params) {
     const table = params.table;
     if (!table)
         return textResult({ error: "Either 'table' or 'rpc_name' is required." });
-    const select = params.select ?? "*";
+    const select = sanitizeSelect(table, params.select ?? "*");
     const eqFilters = params.eq_filters ?? params.filters ?? {};
     const gteFilters = params.gte_filters ?? {};
     const lteFilters = params.lte_filters ?? {};
@@ -173,11 +235,13 @@ export async function execute(_id, params) {
     const { data, error } = await query;
     if (error)
         return textResult({ error: error.message });
+    const isSensitive = COMP_SENSITIVE_TABLES.includes(table.toLowerCase());
+    const rows = isSensitive ? scrubCompFromRows(data ?? []) : (data ?? []);
     return textResult({
         source: table,
-        row_count: (data ?? []).length,
-        rows: data ?? [],
-        note: (data ?? []).length === limit ? `Limit reached (${limit}). Increase for more.` : undefined,
+        row_count: rows.length,
+        rows,
+        note: rows.length === limit ? `Limit reached (${limit}). Increase for more.` : undefined,
     });
 }
 //# sourceMappingURL=query-supabase.js.map
