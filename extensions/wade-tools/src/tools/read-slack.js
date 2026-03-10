@@ -21,7 +21,7 @@ export const definition = {
             },
             limit: {
                 type: "number",
-                description: "Max messages/channels to return (default 20, max 100).",
+                description: "Max channels or messages to return (default 200 for list_channels, 20 for messages, max 500).",
             },
         },
         required: ["action"],
@@ -58,23 +58,39 @@ async function resolveChannelId(client, nameOrId) {
             return nameOrId;
     }
     const cleanName = nameOrId.replace(/^#/, "");
-    const result = await client.conversations.list({
-        types: "public_channel,private_channel,mpim,im",
-        limit: 200,
-        exclude_archived: true,
-    });
-    const ch = result.channels?.find((c) => c.name === cleanName);
-    if (ch?.id)
-        return ch.id;
+    let cursor;
+    do {
+        const result = await client.users.conversations({
+            types: "public_channel,private_channel,mpim,im",
+            limit: 200,
+            exclude_archived: true,
+            ...(cursor ? { cursor } : {}),
+        });
+        const ch = result.channels?.find((c) => c.name === cleanName);
+        if (ch?.id)
+            return ch.id;
+        cursor = result.response_metadata?.next_cursor || undefined;
+    } while (cursor);
     throw new Error(`Channel "${nameOrId}" not found. Use list_channels to see available channels.`);
 }
 async function listChannels(client, limit) {
-    const result = await client.conversations.list({
-        types: "public_channel,private_channel,mpim,im",
-        limit: Math.min(limit, 100),
-        exclude_archived: true,
-    });
-    const channels = result.channels || [];
+    const allChannels = [];
+    let cursor;
+    const pageSize = 200;
+    do {
+        const result = await client.users.conversations({
+            types: "public_channel,private_channel,mpim,im",
+            limit: pageSize,
+            exclude_archived: true,
+            ...(cursor ? { cursor } : {}),
+        });
+        const page = result.channels || [];
+        allChannels.push(...page);
+        cursor = result.response_metadata?.next_cursor || undefined;
+        if (!cursor)
+            break;
+    } while (allChannels.length < limit);
+    const channels = allChannels.slice(0, limit);
     const formatted = await Promise.all(channels.map(async (ch) => {
         let type = "channel";
         if (ch.is_im)
@@ -97,6 +113,7 @@ async function listChannels(client, limit) {
     }));
     return textResult({
         channel_count: formatted.length,
+        total_available: allChannels.length,
         channels: formatted,
     });
 }
@@ -144,7 +161,9 @@ async function searchMessages(client, query, limit) {
 }
 export async function execute(_id, params) {
     const action = params.action;
-    const limit = Math.min(params.limit ?? 20, 100);
+    const defaultLimit = action === "list_channels" ? 500 : 20;
+    const maxLimit = action === "list_channels" ? 500 : 100;
+    const limit = Math.min(params.limit ?? defaultLimit, maxLimit);
     let client;
     try {
         client = getClient();
