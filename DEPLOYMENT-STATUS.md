@@ -42,7 +42,7 @@ Wade also has access to OpenClaw's built-in core tools (cron, read, pdf, web_fet
       "timeoutSeconds": 900,
       "heartbeat": {
         "every": "30m",
-        "activeHours": { "start": "07:00", "end": "21:00" },
+        "activeHours": { "start": "06:00", "end": "21:00" },
         "target": "last"
       },
       "maxConcurrent": 4,
@@ -95,7 +95,7 @@ Wade also has access to OpenClaw's built-in core tools (cron, read, pdf, web_fet
 - **`tools.deny`** blocks only destructive core tools (exec, process, write, edit, apply_patch, gateway). All other core tools (cron, read, pdf, browser, subagents, web_search, etc.) are available.
 - **Do NOT set `plugins.allow`** — causes a circular validation error. Leave unset; empty = auto-allow.
 - **`compaction.mode`** must be `"default"` or `"safeguard"`. Any other value silently breaks plugin tool registration.
-- **`heartbeat`** — Wade proactively checks in every 30 minutes during active hours (7am-9pm).
+- **`heartbeat`** — Wade proactively checks in every 30 minutes during active hours (6am-9pm).
 - **`session.reset`** — Sessions reset daily at 4am or after 240 minutes idle.
 - **`subagents`** — Max 8 concurrent, depth 1, 4 children per agent, 10-minute timeout.
 - **Bot token and gateway auth token** are in the live config but omitted here. The gateway wrapper overwrites `gateway.auth.token` and `gateway.controlUi.allowedOrigins` on every boot.
