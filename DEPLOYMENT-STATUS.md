@@ -23,8 +23,11 @@ Wade's financial analysis tools running on OpenClaw (Railway) as a plugin. Avail
 | Category | Tools |
 |----------|-------|
 | Financial Queries | `query_ramp_spend`, `query_sage_gl`, `query_toast_data` |
+| Knowledge & Memory | `search_knowledge`, `save_memory`, `search_memories`, `forget_memory` |
+| Ingestion | `ingest_slack`, `ingest_calendar`, `ingest_rss`, `ingest_granola`, `query_ingestion_log` |
 | Utility | `query_supabase`, `query_financial_data`, `retrieve_knowledge_doc`, `retrieve_ramp_invoice` |
 | External | `search_web`, `read_github_file` |
+| Communication | `read_slack` |
 | Side-effect | `send_email`, `create_calendar_event`, `get_calendar_availability`, `list_upcoming_events`, `manage_scheduled_tasks`, `approve_action`, `reject_action` |
 
 Wade also has access to OpenClaw's built-in core tools (cron, read, pdf, web_fetch, browser, subagents, sessions_spawn, agents_list, image, canvas, nodes, tts, web_search) via the `"full"` tools profile.
@@ -204,12 +207,12 @@ railway ssh ... -- "chown -R 0:0 /data/workspace/.openclaw/extensions/wade-tools
 3. Copy `reference/` and `agent/` dirs to openclaw-workspace
 4. Verify `package.json` in openclaw-workspace has `"extensions": ["./index.js"]`
 5. `git add && git commit && git push` in openclaw-workspace
-6. SSH to Railway: `cd /tmp && rm -rf openclaw-workspace && git clone --depth 1 https://github.com/colinreed88-maker/openclaw-workspace.git && cp -r /tmp/openclaw-workspace/extensions/wade-tools/* /data/workspace/.openclaw/extensions/wade-tools/ && chown -R 0:0 /data/workspace/.openclaw/extensions/wade-tools && rm -rf /tmp/openclaw-workspace`
+6. SSH to Railway: `cd /tmp && rm -rf openclaw-workspace && git clone --depth 1 https://github.com/colinreed88-maker/openclaw-workspace.git && cp -r /tmp/openclaw-workspace/extensions/wade-tools/* /data/workspace/.openclaw/extensions/wade-tools/ && cp /tmp/openclaw-workspace/HEARTBEAT.md /data/workspace/HEARTBEAT.md && chown -R 0:0 /data/workspace/.openclaw/extensions/wade-tools && rm -rf /tmp/openclaw-workspace`
 7. SSH: `find /data/workspace/.openclaw/extensions/wade-tools -name '*.ts' -delete` (remove any .ts that snuck in)
 8. SSH: Fix ownership: `chown -R 0:0 /data/workspace/.openclaw/extensions/wade-tools`
 9. SSH: Restart gateway via SIGUSR1: `kill -USR1 $(ps aux | grep openclaw-gateway | grep -v grep | head -1 | awk '{print $2}')`
 10. Wait ~20s for gateway to restart
-11. Verify: `node /openclaw/dist/entry.js plugins info wade-tools` — should show all 14 tools
+11. Verify: `node /openclaw/dist/entry.js plugins info wade-tools` — should show all 23+ tools
 12. Verify: run `node /openclaw/dist/entry.js agent --json --session-id test -m 'List your tools'` and check the `systemPromptReport.tools.entries` includes Wade tools
 13. Test via Telegram: "What is the current MBR last closed month?"
 
