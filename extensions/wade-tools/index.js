@@ -10,7 +10,6 @@ import * as retrieveRampInvoice from "./src/tools/retrieve-ramp-invoice.js";
 // External tools
 import * as searchWeb from "./src/tools/search-web.js";
 import * as readGithubFile from "./src/tools/read-github-file.js";
-import * as manageScheduledTasks from "./src/tools/manage-scheduled-tasks.js";
 // Side-effect tools (email, calendar)
 import { sendEmailDef, sendEmailExecute } from "./src/tools/email.js";
 import { createCalendarEventDef, createCalendarEventExecute, getCalendarAvailabilityDef, getCalendarAvailabilityExecute, listUpcomingEventsDef, listUpcomingEventsExecute, } from "./src/tools/calendar.js";
@@ -70,10 +69,6 @@ export default function (api) {
     api.registerTool({
         ...listUpcomingEventsDef,
         execute: listUpcomingEventsExecute,
-    });
-    api.registerTool({
-        ...manageScheduledTasks.definition,
-        execute: manageScheduledTasks.execute,
     });
 }
 //# sourceMappingURL=index.js.map
