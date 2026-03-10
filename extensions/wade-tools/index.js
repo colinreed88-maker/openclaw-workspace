@@ -10,6 +10,7 @@ import * as retrieveRampInvoice from "./src/tools/retrieve-ramp-invoice.js";
 // External tools
 import * as searchWeb from "./src/tools/search-web.js";
 import * as readGithubFile from "./src/tools/read-github-file.js";
+import * as readSlack from "./src/tools/read-slack.js";
 // Side-effect tools (email, calendar)
 import { sendEmailDef, sendEmailExecute } from "./src/tools/email.js";
 import { createCalendarEventDef, createCalendarEventExecute, getCalendarAvailabilityDef, getCalendarAvailabilityExecute, listUpcomingEventsDef, listUpcomingEventsExecute, } from "./src/tools/calendar.js";
@@ -52,6 +53,10 @@ export default function (api) {
     api.registerTool({
         ...readGithubFile.definition,
         execute: readGithubFile.execute,
+    });
+    api.registerTool({
+        ...readSlack.definition,
+        execute: readSlack.execute,
     });
     // ── Side-effect tools ──
     api.registerTool({
