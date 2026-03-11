@@ -59,7 +59,6 @@ Wade also has access to OpenClaw's built-in core tools (cron, read, pdf, web_fet
   },
   "tools": {
     "profile": "full",
-    "allow": ["wade-tools"],
     "deny": ["exec", "process", "write", "edit", "apply_patch", "gateway"]
   },
   "messages": { "ackReactionScope": "group-mentions" },
@@ -94,7 +93,8 @@ Wade also has access to OpenClaw's built-in core tools (cron, read, pdf, web_fet
 
 ### Config Notes
 
-- **`tools.profile` must be `"full"`**, not `"messaging"`. The `messaging` profile filters out ALL plugin tools even when listed in `tools.allow`.
+- **`tools.profile` must be `"full"`**, not `"messaging"`. The `messaging` profile filters out ALL plugin tools.
+- **Do NOT set `tools.allow`** — it acts as a strict whitelist that blocks core tools (cron, browser, subagents, etc.). The plugin is loaded via `plugins.load.paths`; core tools come from the `"full"` profile.
 - **`tools.deny`** blocks only destructive core tools (exec, process, write, edit, apply_patch, gateway). All other core tools (cron, read, pdf, browser, subagents, web_search, etc.) are available.
 - **Do NOT set `plugins.allow`** — causes a circular validation error. Leave unset; empty = auto-allow.
 - **`compaction.mode`** must be `"default"` or `"safeguard"`. Any other value silently breaks plugin tool registration.
@@ -198,7 +198,8 @@ railway ssh ... -- "chown -R 0:0 /data/workspace/.openclaw/extensions/wade-tools
 14. **CRITICAL: The Railway entrypoint runs `chown -R openclaw:openclaw /data` on every boot.** This resets plugin directory ownership to uid=1001, which OpenClaw blocks. A patched entrypoint at `/data/entrypoint-wade.sh` (persistent volume) adds a `chown -R 0:0` for the plugin directory after the blanket chown. After every redeploy, copy it: `cp /data/entrypoint-wade.sh /app/entrypoint.sh`.
 15. **SIGUSR1 is the safe gateway restart.** Send `kill -USR1 <gateway-pid>` to trigger an in-process restart that re-discovers plugins. Do NOT use `kill 1` — it terminates the container wrapper and often leaves the service in a 502 state for 2-5 minutes.
 16. **Plugin discovery vs. tool injection are separate.** `openclaw plugins info wade-tools` can report "loaded" even when the gateway's running process hasn't injected the tools into agent prompts. Always verify with an actual `agent --json` test and check `systemPromptReport.tools.entries`.
-17. **`tools.allow` with individual tool names is fragile.** If the plugin fails to load (e.g., ownership issue), individual tool names in `tools.allow` become unresolvable references. OpenClaw's `stripPluginOnlyAllowlist()` misidentifies them as core tools, keeping the allowlist active and blocking everything. Always use the plugin ID (`"wade-tools"`) in `tools.allow`, never individual tool names.
+17. **Do NOT set `tools.allow` at all.** Setting `tools.allow: ["wade-tools"]` acts as a strict whitelist that blocks ALL core tools (cron, read, browser, subagents, web_fetch, etc.) — only plugin tools and a couple of built-in memory tools get through. The plugin is already loaded via `plugins.load.paths` and `plugins.entries`. Use only `tools.profile: "full"` with `tools.deny` to block dangerous tools. This gives Wade access to all 43+ tools (23 plugin + 20 core).
+18. **`tools.allow` with individual tool names is also fragile.** If the plugin fails to load (e.g., ownership issue), individual tool names in `tools.allow` become unresolvable references. OpenClaw's `stripPluginOnlyAllowlist()` misidentifies them as core tools, keeping the allowlist active and blocking everything.
 
 ## Deploy Checklist (copy-paste for every deploy)
 
