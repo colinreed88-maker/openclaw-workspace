@@ -1,3 +1,4 @@
+import { readFileSync, writeFileSync } from "fs";
 import { getSupabase } from "../db.js";
 import { createEmbeddingBatch } from "../embeddings.js";
 import { chunkText } from "../chunking.js";
@@ -6,6 +7,7 @@ import { textResult } from "../types.js";
 const PAGE_KEY = "wade-private";
 const SOURCE_TYPE = "rss";
 const EMBED_BATCH = 50;
+const RSS_CONFIG_PATH = "/data/.openclaw/rss-feeds.json";
 const DEFAULT_FEEDS = [
     // Hospitality
     { name: "Skift", url: "https://skift.com/feed/", category: "hospitality" },
@@ -17,6 +19,17 @@ const DEFAULT_FEEDS = [
     // Finance
     { name: "Calculated Risk", url: "https://www.calculatedriskblog.com/feeds/posts/default?alt=rss", category: "finance" },
 ];
+function loadPersistedFeeds() {
+    try {
+        return JSON.parse(readFileSync(RSS_CONFIG_PATH, "utf8"));
+    }
+    catch {
+        return DEFAULT_FEEDS;
+    }
+}
+function savePersistedFeeds(feeds) {
+    writeFileSync(RSS_CONFIG_PATH, JSON.stringify(feeds, null, 2));
+}
 export const definition = {
     name: "ingest_rss",
     description: "Fetch and ingest new articles from RSS feeds into Wade's knowledge base. Each article is summarized, chunked, embedded, and stored. Run by cron every 6 hours or manually.",
@@ -33,7 +46,11 @@ export const definition = {
                         category: { type: "string" },
                     },
                 },
-                description: "Optional: override the default feed list. Each item needs name, url, category.",
+                description: "Optional: override the feed list for this run. Each item needs name, url, category. Use with save_feeds: true to persist permanently.",
+            },
+            save_feeds: {
+                type: "boolean",
+                description: "If true, save the provided feeds list as the new default for all future runs. Stored at /data/.openclaw/rss-feeds.json on the persistent volume (survives redeploys). Requires feeds to be provided.",
             },
             max_articles_per_feed: {
                 type: "number",
@@ -88,7 +105,10 @@ function parseXmlFeed(xml) {
     return items;
 }
 export async function execute(_id, params) {
-    const feeds = params.feeds ?? DEFAULT_FEEDS;
+    const feeds = params.feeds ?? loadPersistedFeeds();
+    if (params.save_feeds && params.feeds) {
+        savePersistedFeeds(params.feeds);
+    }
     const maxPerFeed = params.max_articles_per_feed ?? 5;
     const startTime = Date.now();
     const supabase = getSupabase();
