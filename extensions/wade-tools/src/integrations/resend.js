@@ -23,12 +23,29 @@ export async function sendEmail(params) {
     if (params.cc?.length)
         validateDomains(params.cc);
     const resend = getResend();
+    const attachments = params.attachments?.length
+        ? params.attachments.map((a) => {
+            if (a.path) {
+                return { path: a.path, filename: a.filename };
+            }
+            const content = a.content;
+            const buf = typeof content === "string"
+                ? Buffer.from(content, "base64")
+                : Buffer.isBuffer(content)
+                    ? content
+                    : undefined;
+            if (!buf)
+                throw new Error(`Attachment "${a.filename}" missing path or content`);
+            return { content: buf, filename: a.filename };
+        })
+        : undefined;
     const { data, error } = await resend.emails.send({
         from: FROM_ADDRESS,
         to: params.to,
         cc: params.cc,
         subject: params.subject,
         html: params.html ?? params.body?.replace(/\n/g, "<br>") ?? "",
+        ...(attachments?.length ? { attachments } : {}),
     });
     if (error) {
         throw new Error(`Resend API error: ${error.message}`);

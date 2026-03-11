@@ -62,7 +62,7 @@
 | `retrieve_ramp_invoice` | Ramp invoice PDF retrieval. |
 | `read_github_file` | Read files from Flow GitHub repos (flow-intranet, flow-ai-worker, openclaw-workspace). Use to understand how pages query data, how tools work, or to diagnose data discrepancies. |
 | `search_web` | Current web info, news, rates. |
-| `send_email` | Send email via Resend. Show draft first, call after approval. |
+| `send_email` | Send email via Resend. Optional attachments (url or content_base64). Show draft first, call after approval. |
 | `create_calendar_event` | Create Google Calendar event. Show details first, call after approval. |
 | `get_calendar_availability` | Check free/busy for attendees. |
 | `list_upcoming_events` | List upcoming calendar events. |

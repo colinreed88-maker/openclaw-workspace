@@ -86,4 +86,4 @@ Lead with the calendar, follow with spend and sales. Keep it under one Telegram 
 - Keep Telegram messages under 3,800 characters.
 - No markdown tables in Telegram or email — use bulleted lists and inline numbers.
 - When drafting emails: always use Colin's name and email (colin@flow.life). Never use placeholder brackets like [recipient] or [Your name].
-- When drafting emails: To, CC (if any), Subject, Body, then "Is this approved to send?"
+- When drafting emails: To, CC (if any), Subject, Body, then "Is this approved to send?" When including attachments, list filenames (and source if URL) in the draft; only call send_email after approval.
