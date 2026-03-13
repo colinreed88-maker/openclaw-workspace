@@ -1,4 +1,11 @@
+import { querySnowflake } from "../snowflake.js";
 import { textResult } from "../types.js";
+const BLOCKED_KEYWORDS = [
+    "INSERT", "UPDATE", "DELETE", "DROP", "TRUNCATE",
+    "ALTER", "CREATE", "REPLACE", "MERGE", "GRANT", "REVOKE",
+];
+const MAX_ROWS = 5000;
+const LLM_ROW_CAP = 200;
 export const definition = {
     name: "query_snowflake",
     description: `Execute a read-only SQL query against the Snowflake ANALYTICS data warehouse. ` +
@@ -37,37 +44,45 @@ export const definition = {
         required: ["sql"],
     },
 };
+function isMutating(sql) {
+    const upper = sql.toUpperCase().replace(/\s+/g, " ").trim();
+    for (const keyword of BLOCKED_KEYWORDS) {
+        if (upper.startsWith(keyword) || upper.includes(` ${keyword} `)) {
+            return keyword;
+        }
+    }
+    return null;
+}
+function addLimitIfNeeded(sql) {
+    const upper = sql.toUpperCase().replace(/\s+/g, " ").trim();
+    const clean = sql.trim().replace(/;+\s*$/, "");
+    if (!upper.includes("LIMIT") && (upper.startsWith("SELECT") || upper.startsWith("WITH"))) {
+        return `${clean} LIMIT ${MAX_ROWS}`;
+    }
+    return clean;
+}
 export async function execute(_id, params) {
     const sql = params.sql;
     if (!sql?.trim())
         return textResult({ error: "sql parameter is required" });
-    const apiUrl = process.env.INTRANET_API_URL ?? "https://flow-intranet.vercel.app";
-    const token = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
-    if (!token)
-        return textResult({ error: "SUPABASE_SERVICE_ROLE_KEY not configured" });
+    const blocked = isMutating(sql);
+    if (blocked)
+        return textResult({ error: `Mutating operations are not allowed: ${blocked}` });
+    const safeSql = addLimitIfNeeded(sql);
     try {
-        const res = await fetch(`${apiUrl}/api/snowflake/query?token=${encodeURIComponent(token)}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ sql, database: "ANALYTICS" }),
-        });
-        if (!res.ok) {
-            const body = await res.json().catch(() => ({ error: res.statusText }));
-            return textResult({ error: body.error ?? `Snowflake API ${res.status}` });
-        }
-        const data = await res.json();
+        const result = await querySnowflake(safeSql);
         return textResult({
             source: "snowflake",
             description: params.description,
-            columns: data.columns,
-            row_count: data.totalRows ?? data.rows?.length,
-            rows: data.rows?.slice(0, 200),
-            truncated: (data.rows?.length ?? 0) > 200,
+            columns: result.columns,
+            row_count: result.totalRows,
+            rows: result.rows.slice(0, LLM_ROW_CAP),
+            truncated: result.totalRows > LLM_ROW_CAP,
         });
     }
     catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        return textResult({ error: `Snowflake query failed: ${msg}` });
+        return textResult({ error: msg });
     }
 }
 //# sourceMappingURL=query-snowflake.js.map
