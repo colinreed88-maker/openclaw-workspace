@@ -2,6 +2,7 @@
 import * as queryRampSpend from "./src/tools/query-ramp-spend.js";
 import * as querySageGl from "./src/tools/query-sage-gl.js";
 import * as queryToastData from "./src/tools/query-toast-data.js";
+import * as querySnowflake from "./src/tools/query-snowflake.js";
 // Utility tools
 import * as querySupabase from "./src/tools/query-supabase.js";
 import * as queryFinancialData from "./src/tools/query-financial-data.js";
@@ -40,6 +41,10 @@ export default function (api) {
     api.registerTool({
         ...queryToastData.definition,
         execute: queryToastData.execute,
+    });
+    api.registerTool({
+        ...querySnowflake.definition,
+        execute: querySnowflake.execute,
     });
     // ── Knowledge & memory tools ──
     api.registerTool({

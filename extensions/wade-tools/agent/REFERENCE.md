@@ -54,6 +54,13 @@
 
 | Question type | Tool | Never use |
 |---|---|---|
+| Leasing funnel, prospects, tours, apps | `query_snowflake` | query_financial_data |
+| Tenants, rent roll, occupancy | `query_snowflake` | query_financial_data |
+| Work orders, maintenance | `query_snowflake` | query_financial_data |
+| Yardi transactions, tenant arrears | `query_snowflake` | query_financial_data |
+| Pricing comps, market rents | `query_snowflake` | query_financial_data |
+| Hotel reservations, ADR, RevPAR | `query_snowflake` | query_financial_data |
+| Marketing spend, acquisition costs | `query_snowflake` | query_financial_data |
 | Ramp spend, vendor totals, card expenses | `query_ramp_spend` (supports `department` param) | query_financial_data |
 | GL detail, journal entries, Sage balances | `query_sage_gl` (supports `department` param) | query_financial_data |
 | Budget, forecast, FPA line items | `query_fpa_data` | query_financial_data |
@@ -125,3 +132,214 @@ Allowed:
 - Headcount by department/BU (without comp data)
 
 If asked for individual compensation: "I'm not able to share individual compensation data. I can provide department-level payroll totals or company-wide aggregates if that would be helpful."
+
+---
+
+## Snowflake (ANALYTICS Database)
+
+Use the `query_snowflake` tool for all property operations data: leasing, tenants, occupancy, rent rolls, work orders, pricing, Yardi financials, hotel, and marketing. All tables live in the **ANALYTICS** database. Use fully qualified names like `ANALYTICS.MULTIFAMILY.TENANTS`.
+
+### Schema Overview
+
+| Schema | Domain | Key Tables |
+|--------|--------|------------|
+| MULTIFAMILY | Leasing, tenants, occupancy, rent roll | PROSPECT_DETAILS, TENANTS, DAILY_OCCUPANCY, US_RENT_ROLL_CURRENT, RENEWALS, LEASING_DAILY_ACTIVITY |
+| OPERATIONS | Work orders, unit rents, hotel, concessions | YARDI_WORK_ORDERS, UNIT_RENTS, CONCESSIONS, HOTEL_RESERVATIONS_DETAILED_ROOM_RATES |
+| FINANCIAL | Yardi GL transactions, arrears, lease charges | TRANSACTIONS, TENANT_ARREARS, TENANT_LEASE_CHARGES |
+| HOUSE | Pre-aggregated leasing funnels | GROSS_LEASING_FUNNEL, COHORTED_PROSPECT_FUNNEL |
+| PRICING | Competitor listings, market comps | LISTINGS, COMP_PROPERTIES, V_MARKET_COMPS |
+| MARKETING | Daily spend, acquisition costs | MARKETING_DAILY_SPEND, PERFORMANCE_MARKETING, LEASING_ACQUISITION_COSTS |
+| HOTEL | Reservations, daily/weekly summaries | DAILY_HOTEL_SUMMARY_BY_PROPERTY, RESERVATIONS, CHECK_INS, CHECK_OUTS |
+| BUILDING_OPERATIONS | Zendesk tickets, make-ready, unit status | ZENDESK_TICKETS, MAKE_READY, UNIT_STATUS |
+| FLOW | Master reference | PROPERTIES (13 rows), UNITS (3,907 rows) |
+| DIMENSIONS | Calendar spine | CALENDAR, CALENDAR_PROPERTY_SPINE |
+
+### Key Tables and Columns
+
+**MULTIFAMILY.PROSPECT_DETAILS** (55,887 rows) — Full prospect journey
+- PROSPECT_ID, PROPERTY_CODE, PROPERTY_GROUP, FIRST_NAME, LAST_NAME
+- SOURCE, SOURCE_NAME, MARKETING_SOURCE
+- PROSPECT_DATE, TOUR_DATE, APPLICATION_DATE, APPROVED_DATE, LEASE_DATE, MOVE_IN_DATE
+- FUNNEL_STAGE, IS_CONVERTED, IS_ACTIVE
+- DESIRED_BEDROOMS, DESIRED_FLOORPLAN
+
+**MULTIFAMILY.TENANTS** (9,467 rows) — Tenant roster
+- TENANT_ID, PROPERTY_CODE, PROPERTY_GROUP, NAME
+- STATUS (Current, Former, Future, Eviction, etc.)
+- UNIT_CODE, FLOORPLAN, BEDROOMS, SQFT
+- LEASE_START, LEASE_END, MOVE_IN_DATE, MOVE_OUT_DATE
+- MONTHLY_RENT, MARKET_RENT, CONCESSION_AMOUNT
+
+**MULTIFAMILY.DAILY_OCCUPANCY** (9,417 rows) — Daily occupancy by property
+- DATE, PROPERTY_CODE, PROPERTY_GROUP
+- TOTAL_UNITS, OCCUPIED_UNITS, OCCUPANCY_PCT
+- NET_LEASED_30, NET_LEASED_60, NET_LEASED_90
+- VACANT_UNITS, VACANT_PCT
+
+**MULTIFAMILY.US_RENT_ROLL_CURRENT** (3,111 rows) — Current rent roll snapshot
+- PROPERTY_CODE, PROPERTY_GROUP, UNIT_CODE, FLOORPLAN
+- BEDROOMS, SQFT, STATUS
+- MARKET_RENT, LEASE_RENT, EFFECTIVE_RENT
+- CONCESSION_AMOUNT, TRADE_OUT
+- LEASE_START, LEASE_END
+
+**MULTIFAMILY.RENEWALS** (9,829 rows) — Renewal and move-out detail
+- PROPERTY_CODE, PROPERTY_GROUP, TENANT_ID, UNIT_CODE
+- RENEWAL_STATUS, LEASE_END
+- PRIOR_RENT, NEW_RENT, MARKET_RENT
+- TRADE_OUT, CONCESSION_AMOUNT
+
+**MULTIFAMILY.LEASING_DAILY_ACTIVITY** (105,501 rows) — Per-person daily flags
+- DATE, PROPERTY_CODE, PROPERTY_GROUP, LEASING_AGENT
+- IS_PROSPECT, IS_TOUR, IS_APPLICATION, IS_LEASE, IS_MOVE_IN
+
+**OPERATIONS.YARDI_WORK_ORDERS** (47,026 rows) — Work orders
+- WORK_ORDER_ID, PROPERTY_CODE, PROPERTY_GROUP
+- CATEGORY, SUB_CATEGORY, PRIORITY, STATUS
+- CREATED_DATE, COMPLETED_DATE, DAYS_OPEN
+- UNIT_CODE, ASSIGNED_TECH, DESCRIPTION
+
+**FINANCIAL.TRANSACTIONS** (1,586,576 rows) — All Yardi transactions
+- TRANSACTION_ID, PROPERTY_CODE, PROPERTY_GROUP
+- TENANT_ID, UNIT_CODE
+- TRANSACTION_DATE, TRANSACTION_TYPE, GL_ACCOUNT
+- AMOUNT, DESCRIPTION
+
+**FINANCIAL.TENANT_ARREARS** (124,183 rows) — Aging buckets
+- PROPERTY_CODE, PROPERTY_GROUP, TENANT_ID, UNIT_CODE
+- CURRENT_BALANCE, DAYS_30, DAYS_60, DAYS_90, DAYS_120_PLUS
+- TOTAL_BALANCE
+
+**HOUSE.GROSS_LEASING_FUNNEL** (413,748 rows) — Daily funnel by property + source
+- DATE, PROPERTY_CODE, PROPERTY_GROUP, MARKETING_SOURCE
+- PROSPECTS, TOURS, APPLICATIONS, APPROVALS, LEASES, MOVE_INS
+- CONVERSION_TOUR_PCT, CONVERSION_LEASE_PCT
+
+**MARKETING.MARKETING_DAILY_SPEND** (86,316 rows) — Marketing spend
+- DATE, PROPERTY_CODE, PROPERTY_GROUP, CHANNEL
+- SPEND, IMPRESSIONS, CLICKS
+
+**HOTEL.DAILY_HOTEL_SUMMARY_BY_PROPERTY** (13,785 rows)
+- DATE, PROPERTY_CODE
+- ROOMS_AVAILABLE, ROOMS_SOLD, OCCUPANCY_PCT
+- ADR, REVPAR, REVENUE
+
+### Flow Properties (FLOW.PROPERTIES)
+
+| Code | Name | Group |
+|------|------|-------|
+| flow_miami_world | Flow Miami World | Flow Miami |
+| flow_miami_east | Flow Miami East | Flow Miami |
+| flow_miami_west | Flow Miami West | Flow Miami |
+| r2108 | Flow Fort Lauderdale | Flow Fort Lauderdale |
+| flow_brickell | Flow Brickell | Flow Brickell |
+| stacks | Stacks on Main | Stacks on Main |
+| society | Society Las Olas | Society Las Olas |
+| 2010_west_end | 2010 West End | 2010 West End |
+| 3005_buckhead | 3005 Buckhead | 3005 Buckhead |
+| trace | Trace | Trace |
+| caoba | Caoba | Caoba |
+| g_west | G-West | G-West |
+
+Use PROPERTY_CODE for filtering. Use PROPERTY_GROUP to aggregate across sub-buildings (e.g., Flow Miami group = world + east + west).
+
+### Example Queries
+
+**Occupancy by property (latest day)**
+```sql
+SELECT PROPERTY_GROUP, DATE, TOTAL_UNITS, OCCUPIED_UNITS,
+  ROUND(OCCUPANCY_PCT * 100, 1) AS OCC_PCT
+FROM ANALYTICS.MULTIFAMILY.DAILY_OCCUPANCY
+WHERE DATE = (SELECT MAX(DATE) FROM ANALYTICS.MULTIFAMILY.DAILY_OCCUPANCY)
+ORDER BY PROPERTY_GROUP
+```
+
+**Leasing funnel summary (last 30 days)**
+```sql
+SELECT PROPERTY_GROUP,
+  SUM(PROSPECTS) AS PROSPECTS, SUM(TOURS) AS TOURS,
+  SUM(APPLICATIONS) AS APPS, SUM(LEASES) AS LEASES
+FROM ANALYTICS.HOUSE.GROSS_LEASING_FUNNEL
+WHERE DATE >= DATEADD('day', -30, CURRENT_DATE())
+GROUP BY PROPERTY_GROUP ORDER BY PROSPECTS DESC
+```
+
+**Open work orders by property**
+```sql
+SELECT PROPERTY_GROUP, CATEGORY, COUNT(*) AS OPEN_COUNT,
+  ROUND(AVG(DAYS_OPEN), 1) AS AVG_DAYS_OPEN
+FROM ANALYTICS.OPERATIONS.YARDI_WORK_ORDERS
+WHERE STATUS NOT IN ('Completed', 'Cancelled')
+GROUP BY PROPERTY_GROUP, CATEGORY
+ORDER BY OPEN_COUNT DESC
+```
+
+**Current rent roll summary**
+```sql
+SELECT PROPERTY_GROUP, COUNT(*) AS UNITS,
+  ROUND(AVG(MARKET_RENT), 0) AS AVG_MARKET,
+  ROUND(AVG(LEASE_RENT), 0) AS AVG_LEASE,
+  ROUND(AVG(TRADE_OUT), 0) AS AVG_TRADE_OUT
+FROM ANALYTICS.MULTIFAMILY.US_RENT_ROLL_CURRENT
+GROUP BY PROPERTY_GROUP ORDER BY PROPERTY_GROUP
+```
+
+**Tenant arrears summary**
+```sql
+SELECT PROPERTY_GROUP,
+  COUNT(*) AS TENANTS_WITH_BALANCE,
+  ROUND(SUM(TOTAL_BALANCE), 0) AS TOTAL_ARREARS,
+  ROUND(SUM(DAYS_30), 0) AS OVER_30,
+  ROUND(SUM(DAYS_60), 0) AS OVER_60,
+  ROUND(SUM(DAYS_90), 0) AS OVER_90
+FROM ANALYTICS.FINANCIAL.TENANT_ARREARS
+WHERE TOTAL_BALANCE > 0
+GROUP BY PROPERTY_GROUP ORDER BY TOTAL_ARREARS DESC
+```
+
+**Hotel performance (last 7 days)**
+```sql
+SELECT PROPERTY_CODE, DATE, ROOMS_SOLD, OCCUPANCY_PCT,
+  ROUND(ADR, 2) AS ADR, ROUND(REVPAR, 2) AS REVPAR
+FROM ANALYTICS.HOTEL.DAILY_HOTEL_SUMMARY_BY_PROPERTY
+WHERE DATE >= DATEADD('day', -7, CURRENT_DATE())
+ORDER BY DATE DESC, PROPERTY_CODE
+```
+
+**Marketing spend by channel (current month)**
+```sql
+SELECT CHANNEL, PROPERTY_GROUP,
+  ROUND(SUM(SPEND), 2) AS TOTAL_SPEND,
+  SUM(CLICKS) AS CLICKS, SUM(IMPRESSIONS) AS IMPRESSIONS
+FROM ANALYTICS.MARKETING.MARKETING_DAILY_SPEND
+WHERE DATE >= DATE_TRUNC('month', CURRENT_DATE())
+GROUP BY CHANNEL, PROPERTY_GROUP ORDER BY TOTAL_SPEND DESC
+```
+
+### Snowflake vs Supabase Tool Routing
+
+| Question type | Use tool |
+|---|---|
+| Leasing funnel, prospects, tours, apps | `query_snowflake` |
+| Tenants, rent roll, occupancy | `query_snowflake` |
+| Work orders, maintenance | `query_snowflake` |
+| Yardi transactions, tenant arrears | `query_snowflake` |
+| Pricing comps, market rents | `query_snowflake` |
+| Hotel reservations, ADR, RevPAR | `query_snowflake` |
+| Marketing spend, acquisition costs | `query_snowflake` |
+| Ramp card/bill spend | `query_ramp_spend` |
+| Sage GL, journal entries | `query_sage_gl` |
+| Budget, forecast, FPA data | `query_supabase` |
+| Toast F&B, restaurant sales | `query_toast_data` |
+| Headcount, employees, roster | `query_supabase` |
+| Qualitative, SOPs, debt docs | `query_financial_data` |
+
+### Snowflake Query Guidelines
+
+- Always use fully qualified table names: `ANALYTICS.SCHEMA.TABLE`
+- Only SELECT statements allowed (no INSERT, UPDATE, DELETE, DDL)
+- Results capped at 5,000 rows; use GROUP BY or LIMIT for large tables
+- Use Snowflake date functions: `DATEADD('day', -30, CURRENT_DATE())`, `DATE_TRUNC('month', ...)`, `DATEDIFF('day', ...)`
+- Filter by PROPERTY_CODE (exact match) or PROPERTY_GROUP (grouping)
+- Column and table names are UPPERCASE in Snowflake
+- When the user says "Flow Miami" they mean the PROPERTY_GROUP = 'Flow Miami' (3 buildings), not a single property
