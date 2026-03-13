@@ -22,7 +22,7 @@ Wade's financial analysis tools running on OpenClaw (Railway) as a plugin. Avail
 
 | Category | Tools |
 |----------|-------|
-| Financial Queries | `query_ramp_spend`, `query_sage_gl`, `query_toast_data` |
+| Financial Queries | `query_ramp_spend`, `query_sage_gl`, `query_toast_data`, `query_snowflake` |
 | Knowledge & Memory | `search_knowledge`, `save_memory`, `search_memories`, `forget_memory` |
 | Ingestion | `ingest_slack`, `ingest_calendar`, `ingest_rss`, `ingest_granola`, `query_ingestion_log` |
 | Utility | `query_supabase`, `query_financial_data`, `retrieve_knowledge_doc`, `retrieve_ramp_invoice` |
