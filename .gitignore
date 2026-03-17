@@ -1,5 +1,14 @@
-*.d.ts
-*.js.map
-*.ts
-!*.js
-node_modules/
+# Node modules
+.openclaw/extensions/wade-tools/node_modules/
+.openclaw/extensions/_repo/
+
+# Voice test files
+wade_voice*.mp3
+wade_voice*.ogg
+
+# Large binary files
+*.docx
+*.zip
+
+# Temp files
+*.tmp

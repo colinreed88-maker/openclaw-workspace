@@ -24,6 +24,14 @@ import * as readSlack from "./src/tools/read-slack.js";
 // Side-effect tools (email, calendar)
 import { sendEmailDef, sendEmailExecute } from "./src/tools/email.js";
 import { createCalendarEventDef, createCalendarEventExecute, getCalendarAvailabilityDef, getCalendarAvailabilityExecute, listUpcomingEventsDef, listUpcomingEventsExecute, } from "./src/tools/calendar.js";
+import { listEmailsDef, listEmailsExecute, getEmailDef, getEmailExecute, } from "./src/tools/gmail.js";
+// Desktop bridge tools (Colin's machine via Cloudflare Tunnel)
+import * as desktopReadFile from "./src/tools/desktop-read-file.js";
+import * as desktopWriteFile from "./src/tools/desktop-write-file.js";
+import * as desktopListFiles from "./src/tools/desktop-list-files.js";
+import * as desktopShell from "./src/tools/desktop-shell.js";
+import * as desktopScreenshot from "./src/tools/desktop-screenshot.js";
+import * as desktopClipboard from "./src/tools/desktop-clipboard.js";
 export default function (api) {
     // ── Data tools ──
     api.registerTool({
@@ -126,6 +134,39 @@ export default function (api) {
     api.registerTool({
         ...listUpcomingEventsDef,
         execute: listUpcomingEventsExecute,
+    });
+    api.registerTool({
+        ...listEmailsDef,
+        execute: listEmailsExecute,
+    });
+    api.registerTool({
+        ...getEmailDef,
+        execute: getEmailExecute,
+    });
+    // ── Desktop bridge tools ──
+    api.registerTool({
+        ...desktopReadFile.definition,
+        execute: desktopReadFile.execute,
+    });
+    api.registerTool({
+        ...desktopWriteFile.definition,
+        execute: desktopWriteFile.execute,
+    });
+    api.registerTool({
+        ...desktopListFiles.definition,
+        execute: desktopListFiles.execute,
+    });
+    api.registerTool({
+        ...desktopShell.definition,
+        execute: desktopShell.execute,
+    });
+    api.registerTool({
+        ...desktopScreenshot.definition,
+        execute: desktopScreenshot.execute,
+    });
+    api.registerTool({
+        ...desktopClipboard.definition,
+        execute: desktopClipboard.execute,
     });
 }
 //# sourceMappingURL=index.js.map

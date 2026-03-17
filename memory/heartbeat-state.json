@@ -1,0 +1,19 @@
+{
+  "lastChecks": {
+    "ingestionLog": 1741893240,
+    "calendarSync": 1741875240,
+    "closeStatus": 1741886640,
+    "rampBillsLarge": 1741886640,
+    "toastFnB": 1741867840,
+    "rampSpendTrend": 1741890240,
+    "slackMentions": 1741895340,
+    "memoryReview": 1741854240
+  },
+  "consecutiveOks": 1,
+  "lastProactiveTask": "EOD wire + Slack scan",
+  "lastUpdated": "2026-03-13T20:59:00Z",
+  "flags": {
+    "calendarOAuthBroken": true,
+    "fridayWiresStatus": "EOD: UBS->FlowGlobal green; FlowGlobal->MGMT + DACA externals still orange - likely carry to Monday"
+  }
+}

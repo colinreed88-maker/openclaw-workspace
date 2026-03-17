@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>How Wade Works</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 40px 24px;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 1.6rem;
+      font-weight: 600;
+      color: #f8fafc;
+      margin-bottom: 8px;
+      letter-spacing: -0.01em;
+    }
+
+    .subtitle {
+      text-align: center;
+      font-size: 0.85rem;
+      color: #64748b;
+      margin-bottom: 48px;
+    }
+
+    .diagram {
+      max-width: 960px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1.6fr 1fr;
+      grid-template-rows: auto auto auto;
+      gap: 0;
+      align-items: start;
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: #1e2330;
+      border: 1px solid #2d3448;
+      border-radius: 12px;
+      padding: 18px 20px;
+    }
+
+    .card-title {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 12px;
+      color: #94a3b8;
+    }
+
+    .card-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.82rem;
+      color: #cbd5e1;
+      padding: 4px 0;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* ── Center: Wade Core ── */
+    .wade-core {
+      grid-column: 2;
+      grid-row: 1 / 4;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding: 0 28px;
+    }
+
+    .wade-brain {
+      background: #1a2035;
+      border: 2px solid #3b4fd8;
+      border-radius: 16px;
+      padding: 24px;
+      text-align: center;
+    }
+
+    .wade-label {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #818cf8;
+      margin-bottom: 4px;
+    }
+
+    .wade-desc {
+      font-size: 0.78rem;
+      color: #64748b;
+      margin-bottom: 20px;
+    }
+
+    .memory-block {
+      background: #0f1420;
+      border: 1px solid #2d3448;
+      border-radius: 10px;
+      padding: 14px 16px;
+      text-align: left;
+      margin-bottom: 10px;
+    }
+
+    .memory-block-title {
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #818cf8;
+      margin-bottom: 8px;
+    }
+
+    .memory-file {
+      font-size: 0.78rem;
+      color: #94a3b8;
+      padding: 2px 0;
+      font-family: "SF Mono", "Fira Code", monospace;
+    }
+
+    .guardrails-block {
+      background: #1a1020;
+      border: 1px solid #4a2060;
+      border-radius: 10px;
+      padding: 14px 16px;
+      text-align: left;
+    }
+
+    .guardrails-block-title {
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #c084fc;
+      margin-bottom: 8px;
+    }
+
+    .guardrail-item {
+      font-size: 0.78rem;
+      color: #94a3b8;
+      padding: 2px 0;
+    }
+
+    /* ── Left column ── */
+    .col-left {
+      grid-column: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding-right: 8px;
+    }
+
+    /* ── Right column ── */
+    .col-right {
+      grid-column: 3;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding-left: 8px;
+    }
+
+    /* ── Colin card ── */
+    .colin-card {
+      background: #0f2020;
+      border: 2px solid #10b981;
+      border-radius: 12px;
+      padding: 18px 20px;
+      text-align: center;
+    }
+
+    .colin-label {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #34d399;
+      margin-bottom: 4px;
+    }
+
+    .colin-sub {
+      font-size: 0.75rem;
+      color: #6ee7b7;
+    }
+
+    /* ── Sub-agents ── */
+    .subagents-card {
+      background: #141a10;
+      border: 1px dashed #65a30d;
+      border-radius: 12px;
+      padding: 16px 18px;
+    }
+
+    .subagents-title {
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #a3e635;
+      margin-bottom: 8px;
+    }
+
+    /* ── Arrows ── */
+    .arrows-center {
+      grid-column: 2;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 28px;
+      margin-top: -8px;
+      margin-bottom: -8px;
+    }
+
+    /* ── Color dots ── */
+    .blue   { background: #3b82f6; }
+    .green  { background: #10b981; }
+    .purple { background: #a78bfa; }
+    .orange { background: #f97316; }
+    .yellow { background: #eab308; }
+    .pink   { background: #ec4899; }
+    .cyan   { background: #06b6d4; }
+    .red    { background: #ef4444; }
+
+    /* ── Arrow SVG ── */
+    .arrow-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      margin: 8px 0;
+    }
+
+    .arrow-label {
+      font-size: 0.7rem;
+      color: #475569;
+      text-align: center;
+    }
+
+    /* ── Connector lines (decorative) ── */
+    .connector {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 0;
+    }
+
+    .h-line {
+      height: 2px;
+      background: #2d3448;
+      flex: 1;
+    }
+
+    .arrow-tip {
+      color: #2d3448;
+      font-size: 1rem;
+    }
+
+    /* ── Legend ── */
+    .legend {
+      max-width: 960px;
+      margin: 40px auto 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      justify-content: center;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
+      color: #64748b;
+    }
+
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    /* ── Flow arrows between columns ── */
+    .flow-container {
+      max-width: 960px;
+      margin: 0 auto;
+      position: relative;
+    }
+
+    /* ── Tag ── */
+    .tag {
+      display: inline-block;
+      font-size: 0.65rem;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .tag-approval {
+      background: #7c2d12;
+      color: #fb923c;
+    }
+
+    .tag-auto {
+      background: #052e16;
+      color: #4ade80;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>How Wade Works</h1>
+  <p class="subtitle">Architecture overview — March 2026</p>
+
+  <div class="diagram">
+
+    <!-- ══ LEFT COLUMN ══ -->
+    <div class="col-left">
+
+      <div class="colin-card">
+        <div class="colin-label">Colin</div>
+        <div class="colin-sub">Head of Strategic Finance · Flow<br/>via Telegram</div>
+      </div>
+
+      <div style="text-align:center; font-size:0.7rem; color:#475569; padding: 2px 0;">
+        ↕ requests &amp; responses
+      </div>
+
+      <!-- Data Sources -->
+      <div class="card">
+        <div class="card-title">Financial Data</div>
+        <div class="card-item"><span class="dot blue"></span>Supabase (FPA, Ramp)</div>
+        <div class="card-item"><span class="dot blue"></span>Sage Intacct GL</div>
+        <div class="card-item"><span class="dot blue"></span>Toast POS</div>
+        <div class="card-item"><span class="dot blue"></span>Property P&L</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Knowledge Base</div>
+        <div class="card-item"><span class="dot cyan"></span>Vector DB (embeddings)</div>
+        <div class="card-item"><span class="dot cyan"></span>Slack history</div>
+        <div class="card-item"><span class="dot cyan"></span>Granola meeting notes</div>
+        <div class="card-item"><span class="dot cyan"></span>Google Calendar</div>
+        <div class="card-item"><span class="dot cyan"></span>RSS feeds</div>
+      </div>
+
+    </div>
+
+    <!-- ══ CENTER: WADE CORE ══ -->
+    <div class="wade-core">
+
+      <div class="wade-brain">
+        <div class="wade-label">Wade</div>
+        <div class="wade-desc">Executive AI · Anthropic Claude · OpenClaw runtime</div>
+
+        <div class="memory-block">
+          <div class="memory-block-title">Persistent Context (loaded each session)</div>
+          <div class="memory-file">SOUL.md — persona, voice, safety rules</div>
+          <div class="memory-file">IDENTITY.md — role, guardrails, formatting</div>
+          <div class="memory-file">USER.md — about Colin</div>
+          <div class="memory-file">MEMORY.md — long-term curated memory</div>
+          <div class="memory-file">memory/YYYY-MM-DD.md — daily notes</div>
+        </div>
+
+        <div class="guardrails-block">
+          <div class="guardrails-block-title">Non-Negotiable Guardrails</div>
+          <div class="guardrail-item">No harmful, destructive, or deceptive actions</div>
+          <div class="guardrail-item">Emails &amp; calendar events require explicit approval</div>
+          <div class="guardrail-item">No compensation data shared externally</div>
+          <div class="guardrail-item">MEMORY.md stays in direct sessions only</div>
+          <div class="guardrail-item">Draft first, send only when approved</div>
+        </div>
+      </div>
+
+      <!-- Sub-agents -->
+      <div class="subagents-card">
+        <div class="subagents-title">Sub-agents (parallel work)</div>
+        <div class="card-item"><span class="dot yellow"></span>Spawned for independent data pulls</div>
+        <div class="card-item"><span class="dot yellow"></span>Wade orchestrates &amp; synthesizes results</div>
+        <div class="card-item"><span class="dot yellow"></span>Each gets only the context it needs</div>
+      </div>
+
+    </div>
+
+    <!-- ══ RIGHT COLUMN ══ -->
+    <div class="col-right">
+
+      <!-- Outputs -->
+      <div class="card">
+        <div class="card-title">Outputs</div>
+        <div class="card-item">
+          <span class="dot green"></span>
+          Telegram response &nbsp;<span class="tag tag-auto">auto</span>
+        </div>
+        <div class="card-item">
+          <span class="dot orange"></span>
+          Email (send_email) &nbsp;<span class="tag tag-approval">approval</span>
+        </div>
+        <div class="card-item">
+          <span class="dot orange"></span>
+          Calendar event &nbsp;<span class="tag tag-approval">approval</span>
+        </div>
+        <div class="card-item">
+          <span class="dot purple"></span>
+          Files &amp; reports (workspace)
+        </div>
+      </div>
+
+      <!-- Ingestion pipelines -->
+      <div class="card">
+        <div class="card-title">Ingestion Pipelines</div>
+        <div class="card-item"><span class="dot cyan"></span>Slack → KB (every 4h)</div>
+        <div class="card-item"><span class="dot cyan"></span>Calendar → KB (daily)</div>
+        <div class="card-item"><span class="dot cyan"></span>Granola → KB (daily)</div>
+        <div class="card-item"><span class="dot cyan"></span>RSS → KB (every 6h)</div>
+      </div>
+
+      <!-- Tools -->
+      <div class="card">
+        <div class="card-title">Other Tools</div>
+        <div class="card-item"><span class="dot pink"></span>Web search</div>
+        <div class="card-item"><span class="dot pink"></span>GitHub file reader</div>
+        <div class="card-item"><span class="dot pink"></span>PDF analysis</div>
+        <div class="card-item"><span class="dot pink"></span>Ramp invoice retrieval</div>
+        <div class="card-item"><span class="dot pink"></span>Browser automation</div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <div class="legend-item"><span class="legend-dot" style="background:#3b82f6"></span>Financial data</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#06b6d4"></span>Knowledge base</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#818cf8"></span>Wade core / memory</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#eab308"></span>Sub-agents</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#10b981"></span>Auto output</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#f97316"></span>Requires approval</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#ec4899"></span>Utility tools</div>
+  </div>
+
+</body>
+</html>
