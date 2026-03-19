@@ -7,7 +7,7 @@ const ALL_PAGE_KEYS = [
 ];
 export const definition = {
     name: "search_knowledge",
-    description: "Semantic search over Wade's knowledge base — meeting notes, Slack history, calendar context, RSS articles, financial data, SOPs, and more. Use this as the primary tool for qualitative questions, document lookup, and business context. Returns the most relevant chunks ranked by similarity.",
+    description: "Semantic search over Wade's knowledge base — meeting notes, calendar context, RSS articles, financial data, SOPs, and more. Use this as the primary tool for qualitative questions, document lookup, and business context. Returns the most relevant chunks ranked by similarity.",
     parameters: {
         type: "object",
         properties: {
@@ -17,7 +17,7 @@ export const definition = {
             },
             source_filter: {
                 type: "string",
-                description: "Optional: filter by source type (e.g. 'slack', 'granola', 'rss', 'calendar', 'supabase', 'upload'). Omit to search all sources.",
+                description: "Optional: filter by source type (e.g. 'granola', 'rss', 'calendar', 'supabase', 'upload'). Omit to search all sources.",
             },
             limit: {
                 type: "number",

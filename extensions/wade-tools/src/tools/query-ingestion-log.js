@@ -8,7 +8,7 @@ export const definition = {
         properties: {
             source: {
                 type: "string",
-                description: "Filter by source (slack, calendar, granola, rss). Omit to see all sources.",
+                description: "Filter by source (calendar, granola, rss). Omit to see all sources.",
             },
             limit: {
                 type: "number",

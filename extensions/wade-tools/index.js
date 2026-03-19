@@ -12,7 +12,6 @@ import * as retrieveRampInvoice from "./src/tools/retrieve-ramp-invoice.js";
 import * as searchKnowledge from "./src/tools/search-knowledge.js";
 import { saveMemoryDef, saveMemory, searchMemoriesDef, searchMemories, forgetMemoryDef, forgetMemory, } from "./src/tools/memory.js";
 // Ingestion tools
-import * as ingestSlack from "./src/tools/ingest-slack.js";
 import * as ingestCalendar from "./src/tools/ingest-calendar.js";
 import * as ingestRss from "./src/tools/ingest-rss.js";
 import * as ingestGranola from "./src/tools/ingest-granola.js";
@@ -20,7 +19,6 @@ import * as queryIngestionLog from "./src/tools/query-ingestion-log.js";
 // External tools
 import * as searchWeb from "./src/tools/search-web.js";
 import * as readGithubFile from "./src/tools/read-github-file.js";
-import * as readSlack from "./src/tools/read-slack.js";
 // Side-effect tools (email, calendar)
 import { sendEmailDef, sendEmailExecute } from "./src/tools/email.js";
 import { createCalendarEventDef, createCalendarEventExecute, getCalendarAvailabilityDef, getCalendarAvailabilityExecute, listUpcomingEventsDef, listUpcomingEventsExecute, } from "./src/tools/calendar.js";
@@ -86,10 +84,6 @@ export default function (api) {
     });
     // ── Ingestion tools ──
     api.registerTool({
-        ...ingestSlack.definition,
-        execute: ingestSlack.execute,
-    });
-    api.registerTool({
         ...ingestCalendar.definition,
         execute: ingestCalendar.execute,
     });
@@ -113,10 +107,6 @@ export default function (api) {
     api.registerTool({
         ...readGithubFile.definition,
         execute: readGithubFile.execute,
-    });
-    api.registerTool({
-        ...readSlack.definition,
-        execute: readSlack.execute,
     });
     // ── Side-effect tools ──
     api.registerTool({
